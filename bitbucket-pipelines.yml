@@ -3,7 +3,7 @@
 pipelines:
   # FIX: Change branch trigger from 'master' to 'main'
   branches:
-    main:
+    dev:
       - step:
           name: 🏗️ Build and Push Docker Image
           runs-on:
@@ -16,7 +16,7 @@ pipelines:
             - echo "🔐 Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
-            - IMAGE_NAME="${DOCKERHUB_USERNAME}/demo-pipeline-app"
+            - IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
 
@@ -39,7 +39,7 @@ pipelines:
             - export DOCKER_HOST=unix:///var/run/docker.sock
             
             # Use the runner user's home directory (ikarl) for deployment
-            - APP_PATH="/home/ikarl/deploy/demo-pipeline-app"
+            - APP_PATH="/home/ikarl/deploy/automation-project"
             - DEPLOY_USER="$(whoami)"
 
             # 1. Ensure the target directory exists and copy files
