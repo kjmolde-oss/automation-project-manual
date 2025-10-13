@@ -1,0 +1,13 @@
+{
+  "name": "bitbucket-pipeline-demo",
+  "version": "1.0.0",
+  "description": "Simple demo app for Bitbucket pipeline and Docker.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
