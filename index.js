@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-  res.send('Hello World running automatic deply!');
+  res.send('Aotumaction Deployment using Bitbucketv + Docker Hub in Ubuntu Server');
 });
 
 app.listen(PORT, () => {
