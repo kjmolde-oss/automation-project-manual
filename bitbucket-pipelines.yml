@@ -1,11 +1,8 @@
-# Final Configuration: Optimized for Linux Shell Runner and 'main' Branch
-
 pipelines:
-  # FIX: Change branch trigger from 'master' to 'main'
   branches:
     dev:
       - step:
-          name: 🏗️ Build and Push Docker Image
+          name: Build and Push Docker Image
           runs-on:
             - self.hosted
             - linux.shell # Targeting the Shell Runner
@@ -13,24 +10,24 @@ pipelines:
             # Explicitly set DOCKER_HOST for Shell Runner compatibility
             - export DOCKER_HOST=unix:///var/run/docker.sock
             
-            - echo "🔐 Logging in to Docker Hub..."
+            - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
             - IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
 
-            - echo "🏗️ Building Docker image..."
+            - echo "Building Docker image..."
             - docker build -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
 
-            - echo "📤 Pushing images..."
+            - echo "Pushing images..."
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
-            - echo "✅ Image pushed successfully!"
+            - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy to Host VM (192.168.1.14) - Direct Execution
+          name: Deploy to Host VM
           runs-on:
             - self.hosted
             - linux.shell # Targeting the Shell Runner
@@ -43,13 +40,13 @@ pipelines:
             - DEPLOY_USER="$(whoami)"
 
             # 1. Ensure the target directory exists and copy files
-            - echo "🧹 Creating target directory and copying files to ${APP_PATH}..."
+            - echo "Creating target directory and copying files to ${APP_PATH}..."
             - mkdir -p "${APP_PATH}"
             - chown -R ${DEPLOY_USER}:${DEPLOY_USER} "${APP_PATH}"
             - cp -r ./* "${APP_PATH}/"
 
             # 2. Deploy using Docker Compose directly
-            - echo "🚀 Deploying and running app with Docker Compose..."
+            - echo "Deploying and running app with Docker Compose..."
             - cd "${APP_PATH}"
             
             - echo 'Pulling latest images...'
@@ -61,4 +58,5 @@ pipelines:
             - echo 'Starting new stack with Docker Compose in detached mode...'
             - docker compose up -d
 
-            - echo "✅ Deployment completed successfully!"
+            - echo "Deployment completed successfully!"
+
