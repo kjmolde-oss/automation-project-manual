@@ -46,7 +46,7 @@ pipelines:
             
             # 6. Patch the YAML file
             - echo "Patching manifest with new image tag"
-            - sed -i "s|devopskarl/automation-project:latest|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             
             # 7. Apply the updated manifest to the Kubernetes cluster
             - echo "Applying Kubernetes deployment via kubectl..."
