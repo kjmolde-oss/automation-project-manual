@@ -9,11 +9,11 @@ spec:
   selector:
     matchLabels:
       app: automation-project
-  template:
+  template: # <--- Line 14 (Approx.)
     metadata:
       labels:
         app: automation-project
-    spec:
+    spec: # <--- Line 19 (Approx.) - Error is pointing here or just before
       containers:
       - name: automation-project
         image: <IMAGE_PLACEHOLDER> 
