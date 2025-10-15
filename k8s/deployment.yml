@@ -1,4 +1,4 @@
-# File: k8s/deployment.yml (Corrected Structure)
+# File: k8s/deployment.yml (Correct Structure)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,10 +15,15 @@ spec:
       labels:
         app: automation-project
     spec:
-      containers:
-      - name: automation-project
-        # Image key must align directly under the hyphen's contents
-        image: <IMAGE_PLACEHOLDER> 
+    
+    
+    
+    
+      containers: # <--- Line 20 (Must be indented 4 spaces from 'spec')
+      
+      
+      - name: automation-project # <--- Line 21 (Must be indented 2 spaces beyond 'containers:')
+        image: <IMAGE_PLACEHOLDER> # <--- Line 22 (Must align with 'name:')
         ports:
         - containerPort: 3000 
 ---
