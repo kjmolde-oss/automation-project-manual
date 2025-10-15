@@ -7,7 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI Step: Pushes fresh build
+            # CI Step: Pushes fresh build with --no-cache guarantee
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -16,7 +16,7 @@ pipelines:
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             
             - echo "Building Docker image (Forcing fresh build)..."
-            # FIX: --no-cache ensures the image is rebuilt with new code
+            # --no-cache ensures the new code is built and pushed
             - docker build --no-cache -t "${IMAGE_NAME}:latest" . 
             
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
@@ -32,37 +32,28 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # 1. Define the CLONE_DIR variable
+            # Deployment uses the correct, clean manifest file
+            
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            
-            # 2. FORCE Change Directory to the Repository Root
             - cd "${CLONE_DIR}"
-            
-            # 3. Define the FINAL manifest path
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             
-            # 4. Verify the file exists 
-            - echo "Verifying manifest file existence..."
-            - ls -l "${K8S_MANIFEST_PATH}" 
-            
-            # 5. Define the full image tag (Using :latest for guaranteed pull)
+            # 1. Define the image tag (Using :latest for guaranteed pull due to Always policy)
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
             
-            # 6. Patch the YAML file
-            - echo "Patching manifest with new image tag: ${DEPLOY_IMAGE}"
-            # FIX 1: Also patch the file to ensure imagePullPolicy: Always is set
+            # 2. Patch the YAML file (Only injecting the image tag, no Policy injection needed)
+            - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
-            - sed -i "/image: ${DEPLOY_IMAGE}/a\\        imagePullPolicy: Always" "${K8S_MANIFEST_PATH}"
             
-            # 7. Apply the updated manifest to the Kubernetes cluster
+            # 3. Apply the updated manifest to the Kubernetes cluster
             - echo "Applying Kubernetes deployment via kubectl..."
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # FIX 2: Force rollout restart to ensure the new :latest image is pulled
+            # 4. FORCE ROLLOUT RESTART to guarantee Kubernetes uses the fresh :latest image
             - echo "Forcing deployment rollout restart to refresh image cache..."
             - kubectl rollout restart deployment/automation-project-deployment
             
-            # 8. Wait for the deployment to finish rolling out
+            # 5. Wait for the deployment to finish rolling out
             - kubectl rollout status deployment/automation-project-deployment
             
             - echo "✅ Deployment to Kubernetes successful!"
