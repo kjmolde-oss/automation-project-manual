@@ -15,7 +15,7 @@ pipelines:
             - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             - echo "Building Docker image..."
-            - docker build -t "${IMAGE_NAME}:latest" .
+            - docker build --no-cache -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - echo "Pushing images..."
             - docker push "${IMAGE_NAME}:latest"
