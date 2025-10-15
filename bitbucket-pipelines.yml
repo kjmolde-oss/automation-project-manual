@@ -7,7 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # Mandate the use of the host's UNIX socket for Docker communication
+            # FIX: Ensure there are NO blank lines or extra hyphens in the script array
             - export DOCKER_HOST=unix:///var/run/docker.sock
             
             - echo "Logging in to Docker Hub..."
@@ -26,7 +26,7 @@ pipelines:
             - docker push "${VERSIONED_IMAGE}"
             - echo "Image pushed successfully!"
 
-      - step: # <--- FIX: Corrected indentation here (was aligned with 'runs-on')
+      - step:
           name: 🚀 Deploy to Kubernetes Cluster
           runs-on:
             - self.hosted
