@@ -32,15 +32,14 @@ pipelines:
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             
             # 2. FORCE Change Directory to the Repository Root (Path Fix)
-            # This line is correctly formatted to prevent shell and YAML errors.
             - cd "${CLONE_DIR}"
             
-            # 3. Define the FINAL manifest path (now relative)
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            # 3. Define the FINAL manifest path (NOW USING .yml EXTENSION)
+            - export K8S_MANIFEST_PATH="k8s/deployment.yml"
             
             # 4. Verify the file exists 
             - echo "Verifying manifest file existence..."
-            - ls -l "${K8S_MANIFEST_PATH}"
+            - ls -l "${K8S_MANIFEST_PATH}" # This command will now find the file!
             
             # 5. Define the full image tag
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
