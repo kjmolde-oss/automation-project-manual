@@ -35,7 +35,7 @@ pipelines:
             - cd "${CLONE_DIR}"
             
             # 3. Define the FINAL manifest path (NOW USING .yml EXTENSION)
-            - export K8S_MANIFEST_PATH="k8s/deployment.yml"
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             
             # 4. Verify the file exists 
             - echo "Verifying manifest file existence..."
