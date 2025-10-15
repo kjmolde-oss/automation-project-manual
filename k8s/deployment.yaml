@@ -5,15 +5,15 @@ metadata:
   labels:
     app: automation-project
 spec:
-  replicas: 2 
+  replicas: 3
   selector:
     matchLabels:
       app: automation-project
-  template: # <--- Line 14 (Approx.)
+  template:
     metadata:
       labels:
         app: automation-project
-    spec: # <--- Line 19 (Approx.) - Error is pointing here or just before
+    spec:
       containers:
       - name: automation-project
         image: <IMAGE_PLACEHOLDER> 
