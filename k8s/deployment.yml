@@ -1,4 +1,4 @@
-# File: k8s/deployment.yml (Replace contents with this)
+# File: k8s/deployment.yml (Corrected Structure)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: automation-project
-        # CRITICAL: This is the placeholder the pipeline will replace
+        # Image key must align directly under the hyphen's contents
         image: <IMAGE_PLACEHOLDER> 
         ports:
         - containerPort: 3000 
