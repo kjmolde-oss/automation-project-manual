@@ -33,22 +33,24 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # FIX: Use BITBUCKET_CLONE_DIR to build the absolute path
-            - export K8S_MANIFEST_PATH="${BITBUCKET_CLONE_DIR}/k8s/deployment.yaml"
-
-            # 1. Define the full image tag
+            # FIX 1: Change directory to the repository root FIRST
+            - cd "${BITBUCKET_CLONE_DIR}" 
+            
+            # FIX 2: Define the K8S_MANIFEST_PATH using a RELATIVE path from the root
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            
+            # 3. Define the full image tag
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
             
-            # 2. Patch the YAML file using the absolute path
-            - echo "Patching manifest at ${K8S_MANIFEST_PATH} with new image tag..."
-            # The 'sed' command now targets the explicit file location
+            # 4. Patch the YAML file (The 'sed' command now works!)
+            - "Patching manifest at ${K8S_MANIFEST_PATH} with new image tag: ${DEPLOY_IMAGE}"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             
-            # 3. Apply the updated manifest to the Kubernetes cluster
+            # 5. Apply the updated manifest to the Kubernetes cluster
             - echo "Applying Kubernetes deployment via kubectl..."
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 4. Wait for the deployment to finish rolling out
+            # 6. Wait for the deployment to finish rolling out
             - kubectl rollout status deployment/automation-project-deployment
             
             - echo "✅ Deployment to Kubernetes successful!"
