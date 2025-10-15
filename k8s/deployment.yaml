@@ -16,7 +16,7 @@ spec:
     spec: # <--- Line 19 approx. Error occurs because content below is misaligned.
       containers:
       - name: automation-project
-        image: <IMAGE_PLACEHOLDER> 
+        image: devopskarl/automation-project:latest 
         ports:
         - containerPort: 3000 
 ---
