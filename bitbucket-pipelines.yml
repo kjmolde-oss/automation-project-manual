@@ -7,6 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
+            # CI Step (Remains the same, ensures :latest is pushed)
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -34,15 +35,15 @@ pipelines:
             # 2. FORCE Change Directory to the Repository Root (Path Fix)
             - cd "${CLONE_DIR}"
             
-            # 3. Define the FINAL manifest path (NOW USING .yml EXTENSION)
+            # 3. Define the FINAL manifest path
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             
-            # 4. Verify the file exists 
+            # 4. Verify the file exists (using the new path fix)
             - echo "Verifying manifest file existence..."
-            - ls -l "${K8S_MANIFEST_PATH}" # This command will now find the file!
+            - ls -l "${K8S_MANIFEST_PATH}" 
             
-            # 5. Define the full image tag
-            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
+            # 5. Define the full image tag (FIX: Use :latest for guaranteed pull)
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
             
             # 6. Patch the YAML file
             - echo "Patching manifest with new image tag"
