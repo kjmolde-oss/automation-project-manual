@@ -1,4 +1,4 @@
-# File: k8s/deployment.yml (Correct Structure)
+# File: k8s/deployment.yml (Corrected Structure)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,18 +15,12 @@ spec:
       labels:
         app: automation-project
     spec:
-    
-    
-    
-    
-      containers: # <--- Line 20 (Must be indented 4 spaces from 'spec')
-      
-      
-      - name: automation-project # <--- Line 21 (Must be indented 2 spaces beyond 'containers:')
-        image: <IMAGE_PLACEHOLDER> # <--- Line 22 (Must align with 'name:')
+      containers: # (Likely Line 20)
+      - name: automation-project
+        image: <IMAGE_PLACEHOLDER> 
         ports:
         - containerPort: 3000 
----
+--- # <--- (If this line is 26, the error is immediately before it)
 apiVersion: v1
 kind: Service
 metadata:
