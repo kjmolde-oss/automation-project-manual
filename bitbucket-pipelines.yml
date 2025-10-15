@@ -30,28 +30,25 @@ pipelines:
           name: 🚀 Deploy to Kubernetes Cluster
           runs-on:
             - self.hosted
-            - linux.shell # Targeting the Shell Runner
+            - linux.shell
           deployment: Production
           script:
-            # --- Kubernetes Deployment ---
-            
-            # NOTE: Assumes 'kubectl' is installed and configured on the Shell Runner VM.
-            # Assumes a 'k8s/deployment.yaml' file exists in the repo with an <IMAGE_PLACEHOLDER>.
+            # FIX: Use BITBUCKET_CLONE_DIR to build the absolute path
+            - export K8S_MANIFEST_PATH="${BITBUCKET_CLONE_DIR}/k8s/deployment.yaml"
 
             # 1. Define the full image tag
-            # We use the versioned image for the deployment to ensure rolling updates
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
             
-            # 2. Patch the YAML file by replacing the placeholder tag
-            # This is the core CD action: injecting the new image name
-            - echo "Injecting image tag ${DEPLOY_IMAGE} into manifest..."
-            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" k8s/deployment.yaml
+            # 2. Patch the YAML file using the absolute path
+            - echo "Patching manifest at ${K8S_MANIFEST_PATH} with new image tag..."
+            # The 'sed' command now targets the explicit file location
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             
             # 3. Apply the updated manifest to the Kubernetes cluster
             - echo "Applying Kubernetes deployment via kubectl..."
-            - kubectl apply -f k8s/deployment.yaml
+            - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 4. Wait for the deployment to finish rolling out (professional practice)
+            # 4. Wait for the deployment to finish rolling out
             - kubectl rollout status deployment/automation-project-deployment
             
-            - echo "✅ Deployment to Kubernetes successful! New version"
+            - echo "✅ Deployment to Kubernetes successful!"
