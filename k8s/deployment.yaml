@@ -13,7 +13,7 @@ spec:
     metadata:
       labels:
         app: automation-project
-    spec: # <--- Line 19 approx. Error occurs because content below is misaligned.
+    spec:
       containers:
       - name: automation-project
         image: devopskarl/automation-project:latest
