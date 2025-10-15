@@ -43,7 +43,7 @@ pipelines:
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
             
             # 4. Patch the YAML file (The 'sed' command now works!)
-            - "Patching manifest at ${K8S_MANIFEST_PATH} with new image tag: ${DEPLOY_IMAGE}"
+            - echo "Patching manifest at ${K8S_MANIFEST_PATH} with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             
             # 5. Apply the updated manifest to the Kubernetes cluster
