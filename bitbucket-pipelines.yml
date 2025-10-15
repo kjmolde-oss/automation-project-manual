@@ -2,12 +2,12 @@ pipelines:
   branches:
     dev:
       - step:
-          name: Build and Push Docker Image
+          name: 🏗️ Build and Push Docker Image
           runs-on:
             - self.hosted
-            - linux.shell # Targeting the Shell Runner
+            - linux.shell
           script:
-            # Explicitly set DOCKER_HOST for Shell Runner compatibility
+            # Mandate the use of the host's UNIX socket for Docker communication
             - export DOCKER_HOST=unix:///var/run/docker.sock
             
             - echo "Logging in to Docker Hub..."
@@ -27,36 +27,31 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: Deploy to Host VM
+          name: 🚀 Deploy to Kubernetes Cluster
           runs-on:
             - self.hosted
             - linux.shell # Targeting the Shell Runner
           deployment: Production
           script:
-            - export DOCKER_HOST=unix:///var/run/docker.sock
+            # --- Kubernetes Deployment ---
             
-            # Use the runner user's home directory (ikarl) for deployment
-            - APP_PATH="/home/ikarl/deploy/automation-project"
-            - DEPLOY_USER="$(whoami)"
+            # NOTE: Assumes 'kubectl' is installed and configured on the Shell Runner VM.
+            # Assumes a 'k8s/deployment.yaml' file exists in the repo with an <IMAGE_PLACEHOLDER>.
 
-            # 1. Ensure the target directory exists and copy files
-            - echo "Creating target directory and copying files to ${APP_PATH}..."
-            - mkdir -p "${APP_PATH}"
-            - chown -R ${DEPLOY_USER}:${DEPLOY_USER} "${APP_PATH}"
-            - cp -r ./* "${APP_PATH}/"
-
-            # 2. Deploy using Docker Compose directly
-            - echo "Deploying and running app with Docker Compose..."
-            - cd "${APP_PATH}"
+            # 1. Define the full image tag
+            # We use the versioned image for the deployment to ensure rolling updates
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
             
-            - echo 'Pulling latest images...'
-            - docker compose pull
+            # 2. Patch the YAML file by replacing the placeholder tag
+            # This is the core CD action: injecting the new image name
+            - echo "Injecting image tag ${DEPLOY_IMAGE} into manifest..."
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" k8s/deployment.yaml
             
-            - echo 'Stopping and removing old containers...'
-            - docker compose down -v --remove-orphans || true
+            # 3. Apply the updated manifest to the Kubernetes cluster
+            - echo "Applying Kubernetes deployment via kubectl..."
+            - kubectl apply -f k8s/deployment.yaml
             
-            - echo 'Starting new stack with Docker Compose in detached mode...'
-            - docker compose up -d
-
-            - echo "Deployment completed successfully!"
-
+            # 4. Wait for the deployment to finish rolling out (professional practice)
+            - kubectl rollout status deployment/automation-project-deployment
+            
+            - echo "✅ Deployment to Kubernetes successful! New version"
