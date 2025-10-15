@@ -7,7 +7,6 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI: Build and push the versioned image
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -22,13 +21,19 @@ pipelines:
             - docker push "${VERSIONED_IMAGE}"
             - echo "Image pushed successfully!"
 
-      script:
+      - step:
+          name: 🚀 Deploy to Kubernetes Cluster
+          runs-on:
+            - self.hosted
+            - linux.shell
+          deployment: Production
+          script:
             # 1. Define the CLONE_DIR variable
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             
             # 2. FORCE Change Directory to the Repository Root (Path Fix)
-            # This complex line is now correctly formatted on a single array item.
-            - cd "${CLONE_DIR}" || { echo "ERROR: Failed to change directory to ${CLONE_DIR}"; exit 1; }
+            # This line is correctly formatted to prevent shell and YAML errors.
+            - cd "${CLONE_DIR}"
             
             # 3. Define the FINAL manifest path (now relative)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
@@ -38,10 +43,10 @@ pipelines:
             - ls -l "${K8S_MANIFEST_PATH}"
             
             # 5. Define the full image tag
-            - export DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:${VERSIONED_IMAGE}"
             
             # 6. Patch the YAML file
-            - echo "Patching manifest with new image tag: ${DEPLOY_IMAGE}"
+            - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             
             # 7. Apply the updated manifest to the Kubernetes cluster
