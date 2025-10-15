@@ -1,4 +1,4 @@
-# File: k8s/deployment.yaml (Add this to your repository)
+# File: k8s/deployment.yml (Replace contents with this)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,4 +33,4 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 3000
-  type: LoadBalancer # Or NodePort/ClusterIP as needed
+  type: LoadBalancer
