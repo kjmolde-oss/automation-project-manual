@@ -7,18 +7,15 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI Step: Pushes fresh build with --no-cache guarantee
+            # CI Step: Build and push the versioned image
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             - IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
-            
-            - echo "Building Docker image (Forcing fresh build)..."
-            # --no-cache ensures the new code is built and pushed
-            - docker build --no-cache -t "${IMAGE_NAME}:latest" . 
-            
+            - echo "Building Docker image..."
+            - docker build -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - echo "Pushing images..."
             - docker push "${IMAGE_NAME}:latest"
@@ -26,32 +23,34 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy via Ansible to LXD Target
+          name: 🚀 Deploy via Ansible to Remote VM
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # 1. Install necessary Python and Ansible tools
-            # Note: openssh-client is required for Ansible connectivity
+            # --- ANSIBLE SETUP ---
+            - export TARGET_HOST="192.168.1.33"  # TARGET VM IP
+            - export DEPLOY_USER="deploy"       # TARGET VM User
+            
+            # 1. Install necessary Python and Ansible tools (FIXES 'pip3' NOT FOUND)
             - apt-get update && apt-get install -y python3-pip openssh-client
+            - pip3 install ansible # This command will now execute correctly
             
-            # FIX: Use python3 -m pip to execute the installation immediately
-            - python3 -m pip install ansible 
-            
-            # 2. Configure SSH Key for Ansible (The rest of the script remains the same)
+            # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
             # 3. Add Host Fingerprint
-            - ssh-keyscan -H 10.81.37.50 >> ~/.ssh/known_hosts
-            
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
             # 4. Execute Ansible Playbook
-            - echo "Executing Ansible playbook for remote deployment..."
+            - echo "Executing Ansible playbook on $TARGET_HOST..."
+            # NOTE: inventory.ini must contain the correct target IP/User
             - ansible-playbook -i inventory.ini deploy.yml \
               --private-key ~/.ssh/id_rsa \
-              --extra-vars "target_host=ansible_target_node"
+              --user $DEPLOY_USER
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Deployment via Ansible completed successfully!"
