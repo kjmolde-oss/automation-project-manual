@@ -27,9 +27,6 @@ pipelines:
           runs-on:
             - self.hosted
             - linux.shell
-          # The 'apt' cache will speed up all subsequent Ansible/K8s tool installations
-          caches:
-            - apt
           script:
             - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
