@@ -28,22 +28,30 @@ pipelines:
             - self.hosted
             - linux.shell
           deployment: Production
+          caches:
+            - apt
           script:
-            # ... (Installation commands remain the same) ...
-            - sudo apt-get update
-            - sudo apt-get install -y ansible openssh-client
+            # --- ANSIBLE SETUP ---
+            # FIX: Ensure TARGET_HOST is defined early and clearly
+            - export TARGET_HOST="192.168.1.33"
+            - export DEPLOY_USER="deploy"
             
-            # 2. Configure SSH Key
+            # 1. Install prerequisites (This requires sudo)
+            - sudo apt-get update && sudo apt-get install -y python3-pip openssh-client
+            
+            # 2. Install Ansible (using pip3 which is now available)
+            - pip3 install ansible 
+            
+            # 3. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
-            # 3. Add Host Fingerprint
+            # 4. Add Host Fingerprint (The variable is now guaranteed to be defined)
             - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
 
-            # 4. Execute Ansible Playbook (FIXED SYNTAX)
+            # 5. Execute Ansible Playbook (Fixed to single line)
             - echo "Executing Ansible playbook on $TARGET_HOST..."
-            # Note: All arguments are on one line for better parsing
             - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
 
             - rm ~/.ssh/id_rsa
