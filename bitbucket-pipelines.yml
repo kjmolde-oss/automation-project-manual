@@ -27,7 +27,6 @@ pipelines:
           runs-on:
             - self.hosted
             - linux.shell
-          deployment: Production
           script:
             # CD-1: KUBERNETES DEPLOYMENT
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
