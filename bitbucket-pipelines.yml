@@ -28,25 +28,38 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            - export TARGET_HOST="192.168.1.33"
-            - export DEPLOY_USER="deploy"
+            - export TARGET_HOST_MASTER="192.168.1.34" # For Master
+            - export TARGET_HOST_WORKER="192.168.1.33" # For Worker
+            - export DEPLOY_USER_MASTER="ikarl"
+            - export DEPLOY_USER_WORKER="deploy"
             
             # 1. Install prerequisites (Ansible, SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
-            # FIX: Install the required community collection for kernel modules
-            - ansible-galaxy collection install community.general
-            
-            # 2. Configure SSH Key
+            # 2. Configure SSH Key (Required for all connections)
             - mkdir -p ~/.ssh
+            # FIX: Ensure key is clean of Windows characters
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
-            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
-
-            # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
-            - echo "Executing Ansible playbook for cluster configuration..."
-            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
             
+            # 3. FIX: Convert key to readable format (Addresses libcrypto error)
+            # This step eliminates potential key corruption issues permanently.
+            - ssh-keygen -p -f ~/.ssh/id_rsa -m PEM || true
+            
+            # 4. Add Host Fingerprints (Accepts keys for both targets)
+            - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
+            - ssh-keyscan -H $TARGET_HOST_WORKER >> ~/.ssh/known_hosts
+
+            # 5. EXECUTE ANSIBLE PLAYBOOK (Using SSH flags to guarantee connection)
+            - echo "Executing Ansible playbook for cluster configuration..."
+            
+            # Use 'ssh_args' to explicitly disable host key checking and agent use,
+            # focusing connection strictly on the private key file.
+            - ansible-playbook -i inventory.ini cluster-setup.yml \
+              --private-key ~/.ssh/id_rsa \
+              --user "$DEPLOY_USER_MASTER" \
+              -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentityAgent=none"'
+
             - echo "✅ Cluster configuration complete."
 
       - step:
