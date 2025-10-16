@@ -42,8 +42,8 @@ pipelines:
 
             # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
             - echo "Executing Ansible playbook for cluster configuration..."
-            # Note: This is the cluster provisioning/health check step
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
+            # FIX: Use quotes around the user variable to resolve argument error
+            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
             
             - echo "✅ Cluster configuration complete."
 
@@ -70,9 +70,9 @@ pipelines:
             - kubectl rollout status deployment/automation-project-deployment
             
             # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup, run deploy.yml) ---
-            # NOTE: This assumes deploy.yml runs a separate final task, like updating a reverse proxy.
             - echo "Executing final Ansible deployment task..."
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa -u "$DEPLOY_USER"
+            # FIX: Use quotes around the user variable for this step too
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
