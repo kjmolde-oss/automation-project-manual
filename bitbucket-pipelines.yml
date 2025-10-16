@@ -26,34 +26,48 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy to Kubernetes Cluster
+          name: 🚀 Deploy via Ansible (Setup) & Kubectl (App)
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # Deployment uses the correct, clean manifest file
+            # --- ANSIBLE SETUP ---
+            - export TARGET_HOST="192.168.49.2" # Minikube's API IP (Example)
+            - export DEPLOY_USER="ubuntu"
             
+            # 1. Install Ansible (Needed for the playbook)
+            - apt-get update && apt-get install -y python3-pip openssh-client
+            - pip3 install ansible 
+            
+            # 2. Configure SSH Key (Required for Ansible to run remote tasks)
+            - mkdir -p ~/.ssh
+            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
+            - chmod 600 ~/.ssh/id_rsa
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
+            # 3. EXECUTE ANSIBLE PLAYBOOK (Configuration task)
+            # This playbook would ensure the K8s node is healthy or has prerequisite files.
+            - echo "Executing Ansible playbook for cluster setup..."
+            # Note: You would define 'cluster-setup.yml' to run health checks or config tasks
+            - ansible-playbook -i inventory.ini cluster-setup.yml \
+              --private-key ~/.ssh/id_rsa \
+              --user $DEPLOY_USER
+
+            # --- KUBERNETES DEPLOYMENT ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            - cd "${CLONE_DIR}"
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - cd "${CLONE_DIR}"
             
-            # 1. Define the image tag (Using :latest for guaranteed pull due to Always policy)
+            # 4. Patch and Apply
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
-            
-            # 2. Patch the YAML file (Only injecting the image tag, no Policy injection needed)
-            - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
-            
-            # 3. Apply the updated manifest to the Kubernetes cluster
             - echo "Applying Kubernetes deployment via kubectl..."
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 4. FORCE ROLLOUT RESTART to guarantee Kubernetes uses the fresh :latest image
-            - echo "Forcing deployment rollout restart to refresh image cache..."
+            # 5. Force Restart and Verify
             - kubectl rollout restart deployment/automation-project-deployment
-            
-            # 5. Wait for the deployment to finish rolling out
             - kubectl rollout status deployment/automation-project-deployment
             
-            - echo "✅ Deployment to Kubernetes successful!"
+            - rm ~/.ssh/id_rsa
+            - echo "✅ Deployment and Configuration successful!"
