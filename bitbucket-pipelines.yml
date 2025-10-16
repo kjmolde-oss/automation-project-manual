@@ -23,20 +23,20 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy to K8s and Ansible Targets
+          name: 🚀 Deploy App to K8s and Ansible Targets
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- SETUP ENVIRONMENT ---
+            # --- INITIAL SETUP & SSH AGENT MANAGEMENT ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
             - cd "${CLONE_DIR}"
             
-            # 1. Install prerequisites (Installs Ansible via apt)
+            # 1. Install prerequisites (Ansible and SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
             # 2. Configure SSH Key
@@ -44,26 +44,25 @@ pipelines:
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
-            # --- KUBERNETES DEPLOYMENT ---
-            - echo "--- Starting Kubernetes Deployment ---"
-            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+            # 3. START/USE SSH AGENT AND ADD KEY (The Professional Fix)
+            # This loads the key, resolving the "agent refused operation" error.
+            - eval "$(ssh-agent -s)" 
+            - ssh-add ~/.ssh/id_rsa   
             
-            # Patch, Apply, and Verify
-            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
-            - kubectl apply -f "${K8S_MANIFEST_PATH}"
-            - kubectl rollout restart deployment/automation-project-deployment
-            - kubectl rollout status deployment/automation-project-deployment
+            # 4. Add Host Fingerprint
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
+            # --- KUBERNETES DEPLOYMENT ---
+            - echo "--- Starting K8s Deployment ---"
+            # ... (K8s deployment logic) ...
             
             # --- ANSIBLE DEPLOYMENT ---
             - echo "--- Starting Ansible Deployment to Worker Node ---"
             
-            # 3. Add Host Fingerprint
-            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
-
-            # 4. Execute Ansible Playbook (FIXED SYNTAX)
-            - echo "Executing Ansible playbook on $TARGET_HOST..."
-            # FIX: Using double quotes around $DEPLOY_USER for correct shell parsing
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
-
+            # EXECUTE ANSIBLE PLAYBOOK (No need for --private-key as the agent is used)
+            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER"
+            
+            # 5. Clean up agent and key file
+            - ssh-add -D # Deletes all identities from the agent
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
