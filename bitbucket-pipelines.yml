@@ -28,26 +28,33 @@ pipelines:
             - self.hosted
             - linux.shell
           deployment: Production
+          caches:
+            - apt
           script:
-            # --- SETUP ENVIRONMENT ---
+            # --- INITIAL SETUP & AUTH ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
             - cd "${CLONE_DIR}"
             
-            # 1. Install prerequisites (Ansible, now simplified into one step)
+            # 1. Install prerequisites (Ansible and SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
-            # 2. Configure SSH Key
+            # 2. Configure SSH Key (Required for both SSH and Ansible)
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
+            # 3. Add Host Fingerprint (MUST be after key creation)
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
             # --- KUBERNETES DEPLOYMENT ---
             - echo "--- Starting Kubernetes Deployment ---"
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
             
-            # Patch and Apply
+            # Patch, Apply, and Verify
+            - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
@@ -57,9 +64,8 @@ pipelines:
             
             # --- ANSIBLE DEPLOYMENT ---
             - echo "--- Starting Ansible Deployment to Worker Node ---"
-            - export TARGET_HOST="192.168.1.33" # Worker Node IP
-            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
             
+            # Execute Ansible Playbook (Fixed syntax)
             - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
 
             - rm ~/.ssh/id_rsa
