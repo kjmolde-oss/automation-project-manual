@@ -27,16 +27,16 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # 1. Install Ansible (The Shell Runner needs these tools)
+            # 1. Install necessary Python and Ansible tools
             - apt-get update && apt-get install -y python3-pip openssh-client
-            - pip install ansible
+            - pip install ansible # This now works because python3-pip is installed
             
             # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
-            # 3. Add Host Fingerprint
+            # 3. Add Host Fingerprint (Using the stable container IP)
             - ssh-keyscan -H 10.81.37.50 >> ~/.ssh/known_hosts
 
             # 4. Execute Ansible Playbook
