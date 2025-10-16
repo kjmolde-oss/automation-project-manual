@@ -49,9 +49,7 @@ pipelines:
 
             # 4. Execute Ansible Playbook
             - echo "Executing Ansible playbook on $TARGET_HOST..."
-            - ansible-playbook -i inventory.ini deploy.yml \
-              --private-key ~/.ssh/id_rsa \
-              --user $DEPLOY_USER
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Deployment via Ansible completed successfully!"
