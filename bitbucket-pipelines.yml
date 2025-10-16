@@ -7,7 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI: Build and push the versioned image (Step 1 remains the same)
+            # CI: Build and push the versioned image
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -23,56 +23,47 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: ⚙️ Provision & Setup Target Nodes
+          name: 🚀 Deploy App to K8s and Ansible Targets
           runs-on:
             - self.hosted
             - linux.shell
+          deployment: Production
           script:
-            - export TARGET_HOST="192.168.1.33"
+            # --- SETUP ENVIRONMENT ---
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - export DEPLOY_USER="deploy"
+            - cd "${CLONE_DIR}"
             
-            # 1. Install all necessary tools (Ansible and SSH client)
+            # 1. Install prerequisites (Ansible, now simplified into one step)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
             # 2. Configure SSH Key
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
-            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
-
-            # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
-            - echo "Executing Ansible playbook for cluster configuration..."
-            # FIX: Use quotes around the user variable to resolve argument error
-            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
             
-            - echo "✅ Cluster configuration complete."
-
-      - step:
-          name: 🚀 Deploy App (Kubernetes & Final Ansible Task)
-          runs-on:
-            - self.hosted
-            - linux.shell
-          deployment: Production
-          script:
-            # --- KUBERNETES DEPLOYMENT (App Orchestration) ---
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
-            - cd "${CLONE_DIR}"
-            
-            # 1. Patch and Apply
+            # --- KUBERNETES DEPLOYMENT ---
+            - echo "--- Starting Kubernetes Deployment ---"
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
-            - echo "Patching manifest with new image tag"
+            
+            # Patch and Apply
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 2. Force Restart and Verify
+            # Force Restart and Verify
             - kubectl rollout restart deployment/automation-project-deployment
             - kubectl rollout status deployment/automation-project-deployment
             
-            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup, run deploy.yml) ---
-            - echo "Executing final Ansible deployment task..."
-            # FIX: Use quotes around the user variable for this step too
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
+            # --- ANSIBLE DEPLOYMENT ---
+            - echo "--- Starting Ansible Deployment to Worker Node ---"
+            - export TARGET_HOST="192.168.1.33" # Worker Node IP
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+            
+            # EXECUTE ANSIBLE PLAYBOOK (Runs the deploy.yml against the worker node)
+            - ansible-playbook -i inventory.ini deploy.yml \
+              --private-key ~/.ssh/id_rsa \
+              --user "$DEPLOY_USER"
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
