@@ -30,15 +30,13 @@ pipelines:
           deployment: Production
           script:
             # --- ANSIBLE SETUP ---
-            - export TARGET_HOST="192.168.1.33"
-            - export DEPLOY_USER="deploy"
+            - export TARGET_HOST="192.168.1.33" # Target Server IP
+            - export DEPLOY_USER="deploy"      # Target Server User
             
-            # 1. Install prerequisites and fix the PATH issue immediately
-            # This installs pip and then executes ansible-playbook using the full path/command structure.
+            # 1. Install prerequisites and fix the Python path
             - apt-get update && apt-get install -y python3-pip openssh-client
-            
-            # FIX: Use the full Python path to execute pip, bypassing shell path errors
-            - python3 -m pip install ansible 
+            # FIX: Use pip3 directly; it is now in the path after the apt installation.
+            - pip3 install ansible 
             
             # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
@@ -50,6 +48,7 @@ pipelines:
 
             # 4. Execute Ansible Playbook
             - echo "Executing Ansible playbook on $TARGET_HOST..."
+            # NOTE: inventory.ini and deploy.yml must be committed to the repository
             - ansible-playbook -i inventory.ini deploy.yml \
               --private-key ~/.ssh/id_rsa \
               --user $DEPLOY_USER
