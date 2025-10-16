@@ -60,10 +60,7 @@ pipelines:
             - export TARGET_HOST="192.168.1.33" # Worker Node IP
             - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
             
-            # EXECUTE ANSIBLE PLAYBOOK (Runs the deploy.yml against the worker node)
-            - ansible-playbook -i inventory.ini deploy.yml \
-              --private-key ~/.ssh/id_rsa \
-              --user "$DEPLOY_USER"
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
