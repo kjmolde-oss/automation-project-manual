@@ -1,0 +1,51 @@
+# File: cluster-setup.yml
+---
+- name: ⚙️ Prepare All Nodes for Kubernetes Installation
+  # Targets both the master and worker groups defined in inventory.ini
+  hosts: kube_master, kube_workers
+  become: yes # Required to run system-level tasks (apt, swapon)
+  gather_facts: yes
+  tasks:
+    - name: 1. Install Container Runtime (Docker)
+      ansible.builtin.apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: 2. Ensure Docker is running
+      ansible.builtin.systemd_service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: 3. Disable Swap (Kubernetes Requirement)
+      ansible.builtin.shell: |
+        swapoff -a
+        sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      register: swap_status
+      changed_when: swap_status.stdout != ""
+      # Prevents Kubelet failures due to active swap
+
+    - name: 4. Ensure necessary kernel modules are loaded
+      ansible.builtin.community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - overlay
+        - br_netfilter
+
+    - name: 5. Ensure sysctl params are set for Kubernetes
+      ansible.builtin.sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: '1'
+        state: present
+      # This is required for Kubernetes networking
+
+- name: 🚀 Verify Connectivity
+  # Run a simple ping test to confirm Ansible still works after configuration
+  hosts: kube_master, kube_workers
+  gather_facts: false
+  tasks:
+    - name: Test SSH connection post-setup
+      ansible.builtin.ping:
