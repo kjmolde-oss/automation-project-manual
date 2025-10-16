@@ -23,70 +23,59 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy to Kubernetes Cluster
+          name: ⚙️ Provision & Setup Target Nodes
           runs-on:
             - self.hosted
             - linux.shell
+          # The 'apt' cache will speed up all subsequent Ansible/K8s tool installations
+          caches:
+            - apt
           script:
-            # CD-1: KUBERNETES DEPLOYMENT
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
-            - cd "${CLONE_DIR}"
+            - export TARGET_HOST="192.168.1.33"
+            - export DEPLOY_USER="deploy"
             
-            - echo "Applying Kubernetes deployment via kubectl..."
-            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+            # 1. Install all necessary tools (Ansible and SSH client)
+            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
-            # Patch, Apply, and Verify
-            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
-            - kubectl apply -f "${K8S_MANIFEST_PATH}"
-            - kubectl rollout restart deployment/automation-project-deployment
-            - kubectl rollout status deployment/automation-project-deployment
-            - echo "✅ Kubernetes Deployment successful!"
-      - step:
-          name: ⚙️ Provision Multi-Node Cluster
-          runs-on:
-            - self.hosted
-            - linux.shell
-          script:
-            # 1. Install Ansible (if not done globally)
-            - sudo apt-get update && sudo apt-get install -y python3-pip openssh-client
-            - pip3 install ansible 
+            # 2. Configure SSH Key
+            - mkdir -p ~/.ssh
+            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
+            - chmod 600 ~/.ssh/id_rsa
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
+            # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
+            - echo "Executing Ansible playbook for cluster configuration..."
+            # Note: This is the cluster provisioning/health check step
+            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
             
-            # 2. Execute the cluster provisioning playbook
-            - echo "Starting Kubernetes provisioning on Master & Workers..."
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
-            
-            - echo "✅ Cluster provisioned and ready."
+            - echo "✅ Cluster configuration complete."
 
       - step:
-          name: ⚙️ Deploy via Ansible to Remote VM
+          name: 🚀 Deploy App (Kubernetes & Final Ansible Task)
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- ANSIBLE SETUP ---
-            - export TARGET_HOST="192.168.1.33"
-            - export DEPLOY_USER="deploy"
+            # --- KUBERNETES DEPLOYMENT (App Orchestration) ---
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - cd "${CLONE_DIR}"
             
-            # 1. Install prerequisites (FIX: Install Ansible directly via apt)
-            # This installs Ansible, its Python dependencies, and SSH client securely.
-            - sudo apt-get update
-            - sudo apt-get install -y ansible openssh-client
+            # 1. Patch and Apply
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+            - echo "Patching manifest with new image tag"
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
+            - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # The failing 'pip3 install ansible' line is now removed.
-
-            # 2. Configure SSH Key for Ansible
-            - mkdir -p ~/.ssh
-            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
-            - chmod 600 ~/.ssh/id_rsa
+            # 2. Force Restart and Verify
+            - kubectl rollout restart deployment/automation-project-deployment
+            - kubectl rollout status deployment/automation-project-deployment
             
-            # 3. Add Host Fingerprint
-            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
-
-            # 4. Execute Ansible Playbook
-            - echo "Executing Ansible playbook on $TARGET_HOST..."
+            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup, run deploy.yml) ---
+            # NOTE: This assumes deploy.yml runs a separate final task, like updating a reverse proxy.
+            - echo "Executing final Ansible deployment task..."
             - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
 
             - rm ~/.ssh/id_rsa
-            - echo "✅ Deployment via Ansible completed successfully!"
+            - echo "✅ Hybrid Deployment successful!"
