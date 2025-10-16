@@ -7,7 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI: Build and push the versioned image
+            # CI: Build and push the versioned image (Step 1 remains the same)
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -22,47 +22,61 @@ pipelines:
             - docker push "${VERSIONED_IMAGE}"
             - echo "Image pushed successfully!"
 
+
       - step:
-          name: 🚀 Deploy App to K8s and Ansible Targets
+          name: 🚀 Deploy to Kubernetes Cluster
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            # CD-1: KUBERNETES DEPLOYMENT
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}"
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - cd "${CLONE_DIR}"
+           
+            - echo "Applying Kubernetes deployment via kubectl..."
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+           
+            # Patch, Apply, and Verify
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
+            - kubectl apply -f "${K8S_MANIFEST_PATH}"
+            - kubectl rollout restart deployment/automation-project-deployment
+            - kubectl rollout status deployment/automation-project-deployment
+            - echo "✅ Kubernetes Deployment successful!"
+
+
+      - step:
+          name: ⚙️ Deploy via Ansible to Remote VM
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- INITIAL SETUP & SSH AGENT MANAGEMENT ---
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            # --- ANSIBLE SETUP ---
             - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
-            - cd "${CLONE_DIR}"
-            
-            # 1. Install prerequisites (Ansible and SSH client)
-            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
-            
-            # 2. Configure SSH Key
+           
+            # 1. Install prerequisites (FIX: Install Ansible directly via apt)
+            # This installs Ansible, its Python dependencies, and SSH client securely.
+            - sudo apt-get update
+            - sudo apt-get install -y ansible openssh-client
+           
+            # The failing 'pip3 install ansible' line is now removed.
+
+
+            # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
-            
-            # 3. START/USE SSH AGENT AND ADD KEY (The Professional Fix)
-            # This loads the key, resolving the "agent refused operation" error.
-            - eval "$(ssh-agent -s)" 
-            - ssh-add ~/.ssh/id_rsa   
-            
-            # 4. Add Host Fingerprint
+           
+            # 3. Add Host Fingerprint
             - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
 
-            # --- KUBERNETES DEPLOYMENT ---
-            - echo "--- Starting K8s Deployment ---"
-            # ... (K8s deployment logic) ...
-            
-            # --- ANSIBLE DEPLOYMENT ---
-            - echo "--- Starting Ansible Deployment to Worker Node ---"
-            
-            # EXECUTE ANSIBLE PLAYBOOK (No need for --private-key as the agent is used)
-            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER"
-            
-            # 5. Clean up agent and key file
-            - ssh-add -D # Deletes all identities from the agent
+
+            # 4. Execute Ansible Playbook
+            - echo "Executing Ansible playbook on $TARGET_HOST..."
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
+
+
             - rm ~/.ssh/id_rsa
-            - echo "✅ Hybrid Deployment successful!"
+            - echo "✅ Deployment via Ansible completed successfully!"
