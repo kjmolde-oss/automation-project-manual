@@ -1,0 +1,26 @@
+# File: deploy.yml
+---
+- name: Deploy Docker Container via Ansible
+  hosts: web_servers
+  become: yes # Use privilege escalation (sudo) on the remote machine
+  gather_facts: false
+  tasks:
+    - name: Ensure deployment directory exists
+      ansible.builtin.file:
+        path: /home/ubuntu/app_deployment
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Copy docker-compose.yml to remote host
+      ansible.builtin.copy:
+        src: docker-compose.yml 
+        dest: /home/ubuntu/app_deployment/docker-compose.yml
+
+    - name: Deploy and restart container via Docker Compose
+      ansible.builtin.shell: |
+        cd /home/ubuntu/app_deployment
+        /usr/bin/docker compose pull
+        /usr/bin/docker compose up -d --force-recreate
+      args:
+        executable: /bin/bash
