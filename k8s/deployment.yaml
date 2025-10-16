@@ -20,6 +20,10 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 3000 
+      
+      # --- FIX: ADD NODE SELECTOR FOR WORKER ISOLATION ---
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
 ---
 apiVersion: v1
 kind: Service
