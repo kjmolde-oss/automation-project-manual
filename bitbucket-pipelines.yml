@@ -27,13 +27,17 @@ pipelines:
           runs-on:
             - self.hosted
             - linux.shell
+          caches:
+            - apt
           script:
-            # This step sets up Ansible and ensures K8s nodes are configured.
             - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
             
-            # 1. Install prerequisites (Ansible)
+            # 1. Install prerequisites (Ansible, SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
+            
+            # FIX: Install the required community collection for kernel modules
+            - ansible-galaxy collection install community.general
             
             # 2. Configure SSH Key
             - mkdir -p ~/.ssh
@@ -41,9 +45,8 @@ pipelines:
             - chmod 600 ~/.ssh/id_rsa
             - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
 
-            # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep)
+            # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
             - echo "Executing Ansible playbook for cluster configuration..."
-            # Note: This requires cluster-setup.yml or similar.
             - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER"
             
             - echo "✅ Cluster configuration complete."
@@ -55,7 +58,7 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # --- KUBERNETES DEPLOYMENT ---
+            # --- KUBERNETES DEPLOYMENT (App Orchestration) ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - cd "${CLONE_DIR}"
