@@ -28,7 +28,7 @@
       # Prevents Kubelet failures due to active swap
 
     - name: 4. Ensure necessary kernel modules are loaded
-      ansible.builtin.community.general.modprobe:
+      community.general.modprobe: # <--- Use the correct FQCN for the collection
         name: "{{ item }}"
         state: present
       with_items:
