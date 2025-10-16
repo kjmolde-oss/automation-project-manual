@@ -28,8 +28,6 @@ pipelines:
             - self.hosted
             - linux.shell
           deployment: Production
-          caches:
-            - apt
           script:
             # --- INITIAL SETUP & AUTH ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
