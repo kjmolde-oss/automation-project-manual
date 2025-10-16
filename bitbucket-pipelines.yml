@@ -72,7 +72,7 @@ pipelines:
             # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup, run deploy.yml) ---
             # NOTE: This assumes deploy.yml runs a separate final task, like updating a reverse proxy.
             - echo "Executing final Ansible deployment task..."
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa -u "$DEPLOY_USER"
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
