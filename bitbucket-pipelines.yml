@@ -7,7 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # CI Step: No change needed here
+            # CI: Build and push the versioned image (Step 1 remains the same)
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -23,33 +23,53 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy via Ansible to Remote VM
+          name: 🚀 Deploy to Kubernetes Cluster
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- ANSIBLE SETUP ---
+            # CD-1: KUBERNETES DEPLOYMENT
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - cd "${CLONE_DIR}"
+            
+            - echo "Applying Kubernetes deployment via kubectl..."
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+            
+            # Patch, Apply, and Verify
+            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
+            - kubectl apply -f "${K8S_MANIFEST_PATH}"
+            - kubectl rollout restart deployment/automation-project-deployment
+            - kubectl rollout status deployment/automation-project-deployment
+            - echo "✅ Kubernetes Deployment successful!"
+
+      - step:
+          name: ⚙️ Deploy to Ansible Target VM
+          runs-on:
+            - self.hosted
+            - linux.shell
+          deployment: Production
+          script:
+            # CD-2: ANSIBLE DEPLOYMENT
             - export TARGET_HOST="192.168.1.33"
             - export DEPLOY_USER="deploy"
             
-            # 1. Install prerequisites (FIX: Use apt to install Ansible directly)
-            - sudo apt-get update
-            - sudo apt-get install -y ansible openssh-client
+            # Install Ansible (Necessary for every runner session)
+            - sudo apt-get update && sudo apt-get install -y python3-pip openssh-client
+            - pip3 install ansible 
             
-            # The 'pip3 install ansible' line is now safely removed/omitted.
-
-            # 2. Configure SSH Key for Ansible
+            # Configure SSH Key
             - mkdir -p ~/.ssh
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
-            
-            # 3. Add Host Fingerprint
             - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
 
-            # 4. Execute Ansible Playbook
+            # Execute Ansible Playbook
             - echo "Executing Ansible playbook on $TARGET_HOST..."
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER
+            - ansible-playbook -i inventory.ini deploy.yml \
+              --private-key ~/.ssh/id_rsa \
+              --user $DEPLOY_USER
 
             - rm ~/.ssh/id_rsa
             - echo "✅ Deployment via Ansible completed successfully!"
