@@ -1,7 +1,7 @@
 # File: deploy.yml (Minor efficiency updates)
 ---
 - name: Deploy Docker Container via Ansible
-  hosts: web_servers
+  hosts: kube_workers
   become: yes # Use privilege escalation (sudo) on the remote machine
   gather_facts: false
   tasks:
