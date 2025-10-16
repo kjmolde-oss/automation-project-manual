@@ -43,7 +43,7 @@ pipelines:
             # 3. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep - runs cluster-setup.yml)
             - echo "Executing Ansible playbook for cluster configuration..."
             # Note: This is the cluster provisioning/health check step
-            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
             
             - echo "✅ Cluster configuration complete."
 
