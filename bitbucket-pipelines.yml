@@ -28,8 +28,6 @@ pipelines:
             - self.hosted
             - linux.shell
           deployment: Production
-          caches:
-            - apt
           script:
             # --- ANSIBLE SETUP ---
             # FIX: Ensure TARGET_HOST is defined early and clearly
