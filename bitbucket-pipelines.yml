@@ -42,6 +42,21 @@ pipelines:
             - kubectl rollout restart deployment/automation-project-deployment
             - kubectl rollout status deployment/automation-project-deployment
             - echo "✅ Kubernetes Deployment successful!"
+      - step:
+          name: ⚙️ Provision Multi-Node Cluster
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            # 1. Install Ansible (if not done globally)
+            - sudo apt-get update && sudo apt-get install -y python3-pip openssh-client
+            - pip3 install ansible 
+            
+            # 2. Execute the cluster provisioning playbook
+            - echo "Starting Kubernetes provisioning on Master & Workers..."
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user $DEPLOY_USER 
+            
+            - echo "✅ Cluster provisioned and ready."
 
       - step:
           name: ⚙️ Deploy via Ansible to Remote VM
