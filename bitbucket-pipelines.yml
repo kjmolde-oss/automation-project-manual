@@ -29,7 +29,9 @@ pipelines:
           script:
             # 1. Install necessary Python and Ansible tools
             - apt-get update && apt-get install -y python3-pip openssh-client
-            - pip install ansible # This now works because python3-pip is installed
+            
+            # FIX: Use pip3 instead of pip to guarantee the command is found
+            - pip3 install ansible 
             
             # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
