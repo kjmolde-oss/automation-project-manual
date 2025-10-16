@@ -7,6 +7,7 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
+            # CI Step: Build and push the versioned image
             - export DOCKER_HOST=unix:///var/run/docker.sock
             - echo "Logging in to Docker Hub..."
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
@@ -29,12 +30,15 @@ pipelines:
           deployment: Production
           script:
             # --- ANSIBLE SETUP ---
-            - export TARGET_HOST="192.168.1.33"  # Target Server IP
-            - export DEPLOY_USER="deploy"        # Target Server User
+            - export TARGET_HOST="192.168.1.33"
+            - export DEPLOY_USER="deploy"
             
-            # 1. Install necessary Python and Ansible tools (FIX: Ensures pip3 is available)
+            # 1. Install prerequisites and fix the PATH issue immediately
+            # This installs pip and then executes ansible-playbook using the full path/command structure.
             - apt-get update && apt-get install -y python3-pip openssh-client
-            - pip3 install ansible 
+            
+            # FIX: Use the full Python path to execute pip, bypassing shell path errors
+            - python3 -m pip install ansible 
             
             # 2. Configure SSH Key for Ansible
             - mkdir -p ~/.ssh
@@ -46,7 +50,6 @@ pipelines:
 
             # 4. Execute Ansible Playbook
             - echo "Executing Ansible playbook on $TARGET_HOST..."
-            # NOTE: Assumes deploy.yml and inventory.ini are committed
             - ansible-playbook -i inventory.ini deploy.yml \
               --private-key ~/.ssh/id_rsa \
               --user $DEPLOY_USER
