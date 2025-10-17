@@ -1,49 +1,67 @@
-# File: cluster-setup.yml
+# File: cluster-setup.yml (Final Version for Kubeadm)
 ---
-- name: ⚙️ Prepare All Nodes for Kubernetes Installation
-  # Targets both the master and worker groups defined in inventory.ini
+- name: ⚙️ 1. Prepare All Nodes for Kubernetes Installation (Prerequisites)
   hosts: kube_master, kube_workers
-  become: yes # Required to run system-level tasks (apt, swapon)
+  become: yes
   gather_facts: yes
   tasks:
-    - name: 1. Install Container Runtime (Docker)
+    - name: Ensure kernel modules and sysctl params are set
+      ansible.builtin.shell: |
+        # Load kernel modules (requires community.general collection)
+        modprobe overlay
+        modprobe br_netfilter
+        # Enable IP forwarding for bridge traffic (Kubernetes requirement)
+        sysctl net.bridge.bridge-nf-call-iptables=1
+      args:
+        executable: /bin/bash
+
+    - name: Install Container Runtime (Docker)
       ansible.builtin.apt:
         name: docker.io
         state: present
         update_cache: yes
-      when: ansible_os_family == 'Debian'
 
-    - name: 2. Ensure Docker is running
+    - name: Ensure Docker is running
       ansible.builtin.systemd_service:
         name: docker
         state: started
         enabled: yes
 
-    - name: 3. Disable Swap (Kubernetes Requirement)
+    - name: Disable Swap (Kubernetes Requirement)
       ansible.builtin.shell: |
         swapoff -a
         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
       register: swap_status
       changed_when: swap_status.stdout != ""
-      # Prevents Kubelet failures due to active swap
+      tags: swap
 
-    - name: 4. Ensure necessary kernel modules are loaded
-      community.general.modprobe: # <--- Use the correct FQCN for the collection
-        name: "{{ item }}"
+- name: 🚀 2. Install Kubeadm Tools on All Nodes
+  hosts: kube_master, kube_workers
+  become: yes
+  tasks:
+    # Note: Replace this with your actual Kubeadm/K3s installation process
+    - name: Install Kubeadm, Kubelet, and Kubectl
+      ansible.builtin.apt:
+        name: 
+          - kubelet
+          - kubeadm
+          - kubectl
         state: present
-      with_items:
-        - overlay
-        - br_netfilter
 
-    - name: 5. Ensure sysctl params are set for Kubernetes
-      ansible.builtin.sysctl:
-        name: net.bridge.bridge-nf-call-iptables
-        value: '1'
-        state: present
-      # This is required for Kubernetes networking
+- name: 🏷️ 3. Label Worker Node for App Scheduling
+  hosts: kube_workers
+  become: no # Run kubectl as the user that owns the kubeconfig
+  gather_facts: false
+  tasks:
+    - name: Label Worker Node with 'node-type=app-worker'
+      ansible.builtin.shell: |
+        # Executes the label command remotely. Assumes kubeconfig is sourced correctly.
+        kubectl label node {{ inventory_hostname }} node-type=app-worker --overwrite
+      register: label_output
+      changed_when: "'labeled' in label_output.stdout"
+      # This label matches the nodeSelector in k8s/deployment.yaml
 
-- name: 🚀 Verify Connectivity
-  # Run a simple ping test to confirm Ansible still works after configuration
+- name: ✅ 4. Final Verification
   hosts: kube_master, kube_workers
   gather_facts: false
   tasks:
