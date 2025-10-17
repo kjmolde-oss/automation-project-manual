@@ -30,8 +30,8 @@ pipelines:
           deployment: Production
           script:
             # --- INITIAL SETUP & AUTHENTICATION ---
-            - export TARGET_HOST_MASTER="192.168.1.34"
-            - export TARGET_HOST_WORKER="192.168.1.13"
+            - export TARGET_HOST_MASTER="192.168.1.34" 
+            - export TARGET_HOST_WORKER="192.168.1.13" 
             - export DEPLOY_USER_MASTER="ikarl"
             - export DEPLOY_USER_WORKER="deploy"
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
@@ -40,12 +40,10 @@ pipelines:
             # 1. Install prerequisites (Ansible and SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
-            # 2. Configure SSH Key and Load into Agent (The FINAL FIX)
+            # 2. Configure SSH Key (Writes the key to disk, bypassing agent)
             - mkdir -p ~/.ssh
-            
-            # FIX: Pipe the clean secret directly to ssh-add to bypass libcrypto error and file corruption.
-            - eval "$(ssh-agent -s)"
-            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' | ssh-add -
+            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
+            - chmod 600 ~/.ssh/id_rsa
             
             # 3. Add Host Fingerprints
             - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
@@ -53,7 +51,8 @@ pipelines:
 
             # --- ANSIBLE PROVISIONING (Cluster Setup) ---
             - echo "Executing Ansible playbook for cluster configuration..."
-            - ansible-playbook -i inventory.ini cluster-setup.yml --user "$DEPLOY_USER_MASTER"
+            # FIX: Explicitly pass the key file using --private-key
+            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER_MASTER"
             
             - echo "✅ Cluster configuration complete."
             
@@ -72,8 +71,9 @@ pipelines:
             
             # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup on Worker Node) ---
             - echo "Executing final Ansible deployment task..."
-            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER_WORKER"
+            # FIX: Explicitly pass the key file for this final task as well
+            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER_WORKER"
 
-            # 6. Clean up agent
-            - ssh-add -D 
+            # 6. Clean up key file
+            - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
