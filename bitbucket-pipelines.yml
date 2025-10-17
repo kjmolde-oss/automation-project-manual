@@ -29,7 +29,7 @@ pipelines:
             - linux.shell
           script:
             - export TARGET_HOST_MASTER="192.168.1.34" # For Master
-            - export TARGET_HOST_WORKER="192.168.1.33" # For Worker
+            - export TARGET_HOST_WORKER="192.168.1.13" # For Worker
             - export DEPLOY_USER_MASTER="ikarl"
             - export DEPLOY_USER_WORKER="deploy"
             
