@@ -7,7 +7,7 @@
   tasks:
     - name: Ensure kernel modules and sysctl params are set
       ansible.builtin.shell: |
-        # Load kernel modules (requires community.general collection)
+        # Load kernel modules (Note: Requires prior collection installation via bitbucket-pipelines.yml)
         modprobe overlay
         modprobe br_netfilter
         # Enable IP forwarding for bridge traffic (Kubernetes requirement)
@@ -39,14 +39,32 @@
   hosts: kube_master, kube_workers
   become: yes
   tasks:
-    # Note: Replace this with your actual Kubeadm/K3s installation process
-    - name: Install Kubeadm, Kubelet, and Kubectl
+    # --- FIX: ADD KUBERNETES APT REPOSITORY ---
+    - name: Add Kubernetes APT key
+      ansible.builtin.shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | \
+        gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        executable: /bin/bash
+
+    - name: Add Kubernetes repository to sources list
+      ansible.builtin.apt_repository:
+        repo: 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /'
+        state: present
+        filename: kubernetes
+        update_cache: yes # Force APT cache update after adding repo
+
+    # --- FINAL INSTALLATION ---
+    - name: Install Kubeadm, Kubelet, and Kubectl (Now packages are available)
       ansible.builtin.apt:
         name: 
           - kubelet
           - kubeadm
           - kubectl
         state: present
+        # This holds the packages at the current version to prevent accidental auto-upgrades
+        allow_downgrade: yes 
+        dpkg_options: 'force-confdef,force-confold'
 
 - name: 🏷️ 3. Label Worker Node for App Scheduling
   hosts: kube_workers
@@ -59,7 +77,6 @@
         kubectl label node {{ inventory_hostname }} node-type=app-worker --overwrite
       register: label_output
       changed_when: "'labeled' in label_output.stdout"
-      # This label matches the nodeSelector in k8s/deployment.yaml
 
 - name: ✅ 4. Final Verification
   hosts: kube_master, kube_workers
