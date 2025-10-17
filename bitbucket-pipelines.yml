@@ -55,10 +55,7 @@ pipelines:
             
             # Use 'ssh_args' to explicitly disable host key checking and agent use,
             # focusing connection strictly on the private key file.
-            - ansible-playbook -i inventory.ini cluster-setup.yml \
-              --private-key ~/.ssh/id_rsa \
-              --user "$DEPLOY_USER_MASTER" \
-              -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentityAgent=none"'
+            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER_MASTER" -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentityAgent=none"'
 
             - echo "✅ Cluster configuration complete."
 
