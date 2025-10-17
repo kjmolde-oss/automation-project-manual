@@ -23,36 +23,56 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy to Kubernetes Cluster
+          name: 🚀 Deploy App to K8s and Ansible Targets
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- SSH KEY SETUP (Added for completeness/Ansible prep) ---
+            # --- AUTHENTICATION AND SETUP ---
+            - export TARGET_HOST_MASTER="192.168.1.34"
+            - export TARGET_HOST_WORKER="192.168.1.13"
+            - export DEPLOY_USER_MASTER="ikarl"
+            - export DEPLOY_USER_WORKER="deploy"
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            
+            # 1. Install prerequisites (Ansible and SSH client)
+            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
+            
+            # 2. Configure SSH Key and Load into Agent (Resolves authentication failures)
             - mkdir -p ~/.ssh
-            # Write key and set permissions
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
+            - eval "$(ssh-agent -s)"
+            - ssh-add ~/.ssh/id_rsa
             
-            # --- KUBERNETES DEPLOYMENT ---
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}"
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            # 3. Add Host Fingerprints
+            - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
+            - ssh-keyscan -H $TARGET_HOST_WORKER >> ~/.ssh/known_hosts
+
+            # --- ANSIBLE PROVISIONING (Cluster Setup/Health Check) ---
+            - echo "Executing Ansible playbook for cluster configuration..."
+            - ansible-playbook -i inventory.ini cluster-setup.yml --user "$DEPLOY_USER_MASTER"
+            
+            # --- KUBERNETES DEPLOYMENT (Application Orchestration) ---
             - cd "${CLONE_DIR}"
-            
-            # 1. Define the image tag (Using :latest)
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
             
-            # 2. Patch and Apply
+            # 4. Patch and Apply (Ensuring the image is deployed to ALL nodes)
             - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 3. Force Restart and Verify
-            - echo "Forcing deployment rollout restart to refresh image cache..."
+            # 5. Force Restart and Verify
             - kubectl rollout restart deployment/automation-project-deployment
             - kubectl rollout status deployment/automation-project-deployment
             
-            # --- CLEANUP ---
-            - rm ~/.ssh/id_rsa # Delete private key after use
-            - echo "✅ Deployment to Kubernetes successful!"
+            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup on Worker Node) ---
+            - echo "Executing final Ansible deployment task..."
+            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER_WORKER"
+
+            # 6. Clean up agent and key file
+            - ssh-add -D 
+            - rm ~/.ssh/id_rsa
+            - echo "✅ Hybrid Deployment successful!"
