@@ -29,7 +29,7 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # --- INITIAL SETUP & AUTHENTICATION (Runs once for both deployments) ---
+            # --- INITIAL SETUP & AUTHENTICATION ---
             - export TARGET_HOST_MASTER="192.168.1.34" 
             - export TARGET_HOST_WORKER="192.168.1.13" 
             - export DEPLOY_USER_MASTER="ikarl"
@@ -40,12 +40,12 @@ pipelines:
             # 1. Install prerequisites (Ansible and SSH client)
             - sudo apt-get update && sudo apt-get install -y ansible openssh-client
             
-            # 2. Configure SSH Key and Load into Agent (The FINAL FIX for authentication)
+            # 2. Configure SSH Key and Load into Agent
             - mkdir -p ~/.ssh
-            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa # Write and clean the key
+            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
-            - eval "$(ssh-agent -s)" # Start SSH agent
-            - ssh-add ~/.ssh/id_rsa   # Load key (Requires pre-cleaned, unencrypted content)
+            - eval "$(ssh-agent -s)" 
+            - ssh-add ~/.ssh/id_rsa
             
             # 3. Add Host Fingerprints
             - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
@@ -53,6 +53,10 @@ pipelines:
 
             # --- ANSIBLE PROVISIONING (Cluster Setup) ---
             - echo "Executing Ansible playbook for cluster configuration..."
+            
+            # FIX: Remove the taint from the Master Node (192.168.1.34)
+            - kubectl taint nodes $TARGET_HOST_MASTER node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master- || true
+            
             - ansible-playbook -i inventory.ini cluster-setup.yml --user "$DEPLOY_USER_MASTER"
             
             - echo "✅ Cluster configuration complete."
@@ -72,7 +76,6 @@ pipelines:
             
             # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup on Worker Node) ---
             - echo "Executing final Ansible deployment task..."
-            # Note: The key is pulled from the running SSH agent.
             - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER_WORKER"
 
             # 6. Clean up agent and key file
