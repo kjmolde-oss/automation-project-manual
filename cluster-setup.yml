@@ -1,25 +1,26 @@
-# File: cluster-setup.yml (Final Version for Kubeadm)
+# File: cluster-setup.yml (Optimized for Speed and Cache Efficiency)
 ---
 - name: ⚙️ 1. Prepare All Nodes for Kubernetes Installation (Prerequisites)
   hosts: kube_master, kube_workers
   become: yes
-  gather_facts: yes
+  gather_facts: no # Avoids slow initial fact gathering
   tasks:
+    - name: Perform initial apt update and install essential tools (Faster update)
+      ansible.builtin.apt:
+        name: 
+          - curl 
+          - gnupg # Required for the APT key management later
+          - docker.io
+        state: present
+        update_cache: yes # Only perform update here to save time
+
     - name: Ensure kernel modules and sysctl params are set
       ansible.builtin.shell: |
-        # Load kernel modules (Note: Requires prior collection installation via bitbucket-pipelines.yml)
         modprobe overlay
         modprobe br_netfilter
-        # Enable IP forwarding for bridge traffic (Kubernetes requirement)
         sysctl net.bridge.bridge-nf-call-iptables=1
       args:
         executable: /bin/bash
-
-    - name: Install Container Runtime (Docker)
-      ansible.builtin.apt:
-        name: docker.io
-        state: present
-        update_cache: yes
 
     - name: Ensure Docker is running
       ansible.builtin.systemd_service:
@@ -52,7 +53,7 @@
         repo: 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /'
         state: present
         filename: kubernetes
-        update_cache: yes # Force APT cache update after adding repo
+        # We rely on the initial update_cache or the auto-update mechanism
 
     # --- FINAL INSTALLATION ---
     - name: Install Kubeadm, Kubelet, and Kubectl (Now packages are available)
@@ -62,18 +63,18 @@
           - kubeadm
           - kubectl
         state: present
-        # This holds the packages at the current version to prevent accidental auto-upgrades
+        # Since we added a new repository, we must update the cache here!
+        update_cache: yes 
         allow_downgrade: yes 
         dpkg_options: 'force-confdef,force-confold'
 
 - name: 🏷️ 3. Label Worker Node for App Scheduling
   hosts: kube_workers
-  become: no # Run kubectl as the user that owns the kubeconfig
+  become: no 
   gather_facts: false
   tasks:
     - name: Label Worker Node with 'node-type=app-worker'
       ansible.builtin.shell: |
-        # Executes the label command remotely. Assumes kubeconfig is sourced correctly.
         kubectl label node {{ inventory_hostname }} node-type=app-worker --overwrite
       register: label_output
       changed_when: "'labeled' in label_output.stdout"
