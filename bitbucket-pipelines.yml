@@ -15,7 +15,7 @@ pipelines:
             - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             - echo "Building Docker image..."
-            - docker build -t "${IMAGE_NAME}:latest" .
+            - docker build --no-cache -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - echo "Pushing images..."
             - docker push "${IMAGE_NAME}:latest"
@@ -23,57 +23,36 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: 🚀 Deploy App to K8s and Ansible Targets
+          name: 🚀 Deploy to Kubernetes Cluster
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- INITIAL SETUP & AUTHENTICATION ---
-            - export TARGET_HOST_MASTER="192.168.1.34" 
-            - export TARGET_HOST_WORKER="192.168.1.13" 
-            - export DEPLOY_USER_MASTER="ikarl"
-            - export DEPLOY_USER_WORKER="deploy"
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
-            
-            # 1. Install prerequisites (Ansible and SSH client)
-            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
-            
-            # 2. Configure SSH Key (Writes the key to disk, bypassing agent)
+            # --- SSH KEY SETUP (Added for completeness/Ansible prep) ---
             - mkdir -p ~/.ssh
+            # Write key and set permissions
             - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
             - chmod 600 ~/.ssh/id_rsa
             
-            # 3. Add Host Fingerprints
-            - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
-            - ssh-keyscan -H $TARGET_HOST_WORKER >> ~/.ssh/known_hosts
-
-            # --- ANSIBLE PROVISIONING (Cluster Setup) ---
-            - echo "Executing Ansible playbook for cluster configuration..."
-            # FIX: Explicitly pass the key file using --private-key
-            - ansible-playbook -i inventory.ini cluster-setup.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER_MASTER"
-            
-            - echo "✅ Cluster configuration complete."
-            
-            # --- KUBERNETES DEPLOYMENT (App Orchestration) ---
+            # --- KUBERNETES DEPLOYMENT ---
+            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}"
+            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - cd "${CLONE_DIR}"
-            - export DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
             
-            # 4. Patch and Apply
+            # 1. Define the image tag (Using :latest)
+            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
+            
+            # 2. Patch and Apply
             - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             
-            # 5. Force Restart and Verify
+            # 3. Force Restart and Verify
+            - echo "Forcing deployment rollout restart to refresh image cache..."
             - kubectl rollout restart deployment/automation-project-deployment
             - kubectl rollout status deployment/automation-project-deployment
             
-            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup on Worker Node) ---
-            - echo "Executing final Ansible deployment task..."
-            # FIX: Explicitly pass the key file for this final task as well
-            - ansible-playbook -i inventory.ini deploy.yml --private-key ~/.ssh/id_rsa --user "$DEPLOY_USER_WORKER"
-
-            # 6. Clean up key file
-            - rm ~/.ssh/id_rsa
-            - echo "✅ Hybrid Deployment successful!"
+            # --- CLEANUP ---
+            - rm ~/.ssh/id_rsa # Delete private key after use
+            - echo "✅ Deployment to Kubernetes successful!"
