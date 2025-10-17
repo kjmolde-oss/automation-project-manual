@@ -23,66 +23,52 @@ pipelines:
             - echo "Image pushed successfully!"
 
       - step:
-          name: ⚙️ Provision & Setup Target Nodes
-          runs-on:
-            - self.hosted
-            - linux.shell
-          script:
-            - export TARGET_HOST_MASTER="192.168.1.34" # Master Node
-            - export TARGET_HOST_WORKER="192.168.1.13" # Worker Node
-            - export DEPLOY_USER_MASTER="ikarl"
-            - export DEPLOY_USER_WORKER="deploy"
-            
-            # 1. Install prerequisites (Ansible, SSH client)
-            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
-            
-            # 2. Configure SSH Key
-            - mkdir -p ~/.ssh
-            # FIX: Ensure key is clean of Windows characters (essential)
-            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
-            - chmod 600 ~/.ssh/id_rsa
-            
-            # 3. NON-INTERACTIVE FIX: Force key to be unencrypted and load into agent
-            - eval "$(ssh-agent -s)" # Start SSH agent
-            - ssh-add ~/.ssh/id_rsa   # Load key (Requires key to be pre-unencrypted)
-            
-            # 4. Add Host Fingerprints
-            - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
-            - ssh-keyscan -H $TARGET_HOST_WORKER >> ~/.ssh/known_hosts
-
-            # 5. EXECUTE ANSIBLE PLAYBOOK (System/Node Prep)
-            - echo "Executing Ansible playbook for cluster configuration..."
-            - ansible-playbook -i inventory.ini cluster-setup.yml --user "$DEPLOY_USER_MASTER" # Authenticates with the loaded agent
-            
-            - echo "✅ Cluster configuration complete."
-            - ssh-add -D # Clean up agent
-
-      - step:
-          name: 🚀 Deploy App (Kubernetes & Final Ansible Task)
+          name: 🚀 Deploy App to K8s and Ansible Targets
           runs-on:
             - self.hosted
             - linux.shell
           deployment: Production
           script:
-            # --- KUBERNETES DEPLOYMENT (App Orchestration) ---
+            # --- INITIAL SETUP & SSH AGENT MANAGEMENT ---
             - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
+            - export TARGET_HOST="192.168.1.33"
+            - export DEPLOY_USER="deploy"
             - cd "${CLONE_DIR}"
             
-            # 1. Patch and Apply
+            # 1. Install prerequisites (Ansible and SSH client)
+            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
+            
+            # 2. Configure SSH Key
+            - mkdir -p ~/.ssh
+            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
+            - chmod 600 ~/.ssh/id_rsa
+            
+            # 3. FIX: Convert key to unencrypted PEM format (Resolves libcrypto error)
+            # -N "" sets the new passphrase to empty (unencrypted).
+            - ssh-keygen -p -f ~/.ssh/id_rsa -N "" -m PEM || true 
+            
+            # 4. START/USE SSH AGENT AND ADD KEY (This will now succeed)
+            - eval "$(ssh-agent -s)" 
+            - ssh-add ~/.ssh/id_rsa   
+            
+            # 5. Add Host Fingerprint
+            - ssh-keyscan -H $TARGET_HOST >> ~/.ssh/known_hosts
+
+            # --- KUBERNETES DEPLOYMENT ---
+            - echo "--- Starting K8s Deployment ---"
             - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
-            - echo "Patching manifest with new image tag"
             - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
-            
-            # 2. Force Restart and Verify
             - kubectl rollout restart deployment/automation-project-deployment
             - kubectl rollout status deployment/automation-project-deployment
             
-            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup) ---
-            - echo "Executing final Ansible deployment task..."
-            # NOTE: Key is already loaded into the agent from the previous step's environment
-            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER_WORKER"
-
+            # --- ANSIBLE DEPLOYMENT ---
+            - echo "--- Starting Ansible Deployment to Worker Node ---"
+            # Execute Ansible Playbook (Uses key loaded into agent)
+            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER"
+            
+            # 6. Clean up agent and key file
+            - ssh-add -D 
             - rm ~/.ssh/id_rsa
             - echo "✅ Hybrid Deployment successful!"
