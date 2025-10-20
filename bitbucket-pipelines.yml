@@ -3,76 +3,52 @@ pipelines:
     dev:
       - step:
           name: 🏗️ Build and Push Docker Image
+          services:
+            - docker
           runs-on:
             - self.hosted
-            - linux.shell
+            - linux
           script:
-            # CI: Build and push the versioned image
-            - export DOCKER_HOST=unix:///var/run/docker.sock
-            - echo "Logging in to Docker Hub..."
+            # 1. Set Image Details
+            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
+            - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
+            - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
+            
+            # 2. Login to Docker Hub
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            - IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
-            - VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
-            - VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
-            - echo "Building Docker image..."
-            - docker build --no-cache -t "${IMAGE_NAME}:latest" .
+            
+            # 3. Build, Tag, and Push
+            - echo "Building and pushing ${VERSIONED_IMAGE}..."
+            - docker build -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
-            - echo "Pushing images..."
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
-            - echo "Image pushed successfully!"
+            - echo "✅ Image pushed successfully!"
+          artifacts:
+            # Pass the versioned image name to the next step
+            - image_name.txt
 
       - step:
-          name: 🚀 Deploy App to K8s and Ansible Targets
+          name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux.shell
+            - linux
           deployment: Production
           script:
-            # --- AUTHENTICATION AND SETUP ---
-            - export TARGET_HOST_MASTER="192.168.1.34"
-            - export TARGET_HOST_WORKER="192.168.1.13"
-            - export DEPLOY_USER_MASTER="ikarl"
-            - export DEPLOY_USER_WORKER="deploy"
-            - export CLONE_DIR="${BITBUCKET_CLONE_DIR}" 
+            # 1. Read the image name from the previous step's artifact
+            - export VERSIONED_IMAGE=$(cat image_name.txt)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
-            
-            # 1. Install prerequisites (Ansible and SSH client)
-            - sudo apt-get update && sudo apt-get install -y ansible openssh-client
-            
-            # 2. Configure SSH Key and Load into Agent (Resolves authentication failures)
-            - mkdir -p ~/.ssh
-            - echo "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa
-            - chmod 600 ~/.ssh/id_rsa
-            - eval "$(ssh-agent -s)"
-            - ssh-add ~/.ssh/id_rsa
-            
-            # 3. Add Host Fingerprints
-            - ssh-keyscan -H $TARGET_HOST_MASTER >> ~/.ssh/known_hosts
-            - ssh-keyscan -H $TARGET_HOST_WORKER >> ~/.ssh/known_hosts
 
-            # --- ANSIBLE PROVISIONING (Cluster Setup/Health Check) ---
-            - echo "Executing Ansible playbook for cluster configuration..."
-            - ansible-playbook -i inventory.ini cluster-setup.yml --user "$DEPLOY_USER_MASTER"
-            
-            # --- KUBERNETES DEPLOYMENT (Application Orchestration) ---
-            - cd "${CLONE_DIR}"
-            - DEPLOY_IMAGE="${DOCKERHUB_USERNAME}/automation-project:latest"
-            
-            # 4. Patch and Apply (Ensuring the image is deployed to ALL nodes)
-            - echo "Patching manifest with new image tag"
-            - sed -i "s|<IMAGE_PLACEHOLDER>|${DEPLOY_IMAGE}|g" "${K8S_MANIFEST_PATH}"
+            # 2. Update the Kubernetes Manifest
+            # This uses yq, a more robust tool for updating YAML files.
+            # Make sure yq is installed on your runner's image or install it here.
+            - echo "Updating manifest with image"
+            - yq e ".spec.template.spec.containers[0].image = \"${VERSIONED_IMAGE}\"" -i "${K8S_MANIFEST_PATH}"
+
+            # 3. Apply the Manifest
+            # The runner uses its in-cluster service account for authentication. No SSH needed.
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
-            
-            # 5. Force Restart and Verify
-            - kubectl rollout restart deployment/automation-project-deployment
-            - kubectl rollout status deployment/automation-project-deployment
-            
-            # --- FINAL ANSIBLE TASK (e.g., Post-deployment cleanup on Worker Node) ---
-            - echo "Executing final Ansible deployment task..."
-            - ansible-playbook -i inventory.ini deploy.yml --user "$DEPLOY_USER_WORKER"
 
-            # 6. Clean up agent and key file
-            - ssh-add -D 
-            - rm ~/.ssh/id_rsa
-            - echo "✅ Hybrid Deployment successful!"
+            # 4. Verify the Rollout
+            - kubectl rollout status deployment/automation-project-deployment
+            - echo "✅ Deployment successful!"
