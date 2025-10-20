@@ -7,7 +7,7 @@ pipelines:
             - docker
           runs-on:
             - self.hosted
-            - linux
+            - linux.shell
           script:
             # 1. Set Image Details
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
@@ -32,7 +32,7 @@ pipelines:
           name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux
+            - linux.shell
           deployment: Production
           script:
             # 1. Read the image name from the previous step's artifact
