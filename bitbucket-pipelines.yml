@@ -7,7 +7,7 @@ pipelines:
             - docker
           runs-on:
             - self.hosted
-            - linux.shell
+            - linux
           script:
             # 1. Set Image Details
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
@@ -24,6 +24,9 @@ pipelines:
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
             - echo "✅ Image pushed successfully!"
+            
+            # 4. Create the artifact for the next step
+            - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
             # Pass the versioned image name to the next step
             - image_name.txt
@@ -32,7 +35,7 @@ pipelines:
           name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux.shell
+            - linux
           deployment: Production
           script:
             # 1. Read the image name from the previous step's artifact
@@ -40,7 +43,6 @@ pipelines:
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
 
             # 2. Update the Kubernetes Manifest
-            # This uses yq, a more robust tool for updating YAML files.
             # Make sure yq is installed on your runner's image or install it here.
             - echo "Updating manifest with image"
             - yq e ".spec.template.spec.containers[0].image = \"${VERSIONED_IMAGE}\"" -i "${K8S_MANIFEST_PATH}"
