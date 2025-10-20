@@ -2,20 +2,20 @@ pipelines:
   branches:
     dev:
       - step:
-          name: 🏗️ Build and Push Docker Image
+          name: 🏗️ Build and Push Docker Image to GHCR
           services:
             - docker
           runs-on:
             - self.hosted
             - linux
           script:
-            # 1. Set Image Details
-            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
+            # 1. Set Image Details for GHCR
+            - export IMAGE_NAME="ghcr.io/${GH_USER}/automation-project" # Use GHCR format
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             
-            # 2. Login to Docker Hub
-            - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            # 2. Login to GitHub Container Registry
+            - echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
             
             # 3. Build, Tag, and Push
             - echo "Building and pushing ${VERSIONED_IMAGE}..."
@@ -23,12 +23,11 @@ pipelines:
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
-            - echo "✅ Image pushed successfully!"
+            - echo "✅ Image pushed successfully to GHCR!"
             
             # 4. Create the artifact for the next step
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
-            # Pass the versioned image name to the next step
             - image_name.txt
 
       - step:
