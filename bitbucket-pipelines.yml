@@ -8,7 +8,7 @@ pipelines:
       - step:
           name: 🏗️ Build and Push Docker Image
           caches:
-            - docker # Enables the Docker cache for this step
+            - docker-layers # <-- This now matches the definition
           services:
             - docker
           runs-on:
@@ -16,7 +16,7 @@ pipelines:
             - linux
           script:
             # 1. Set Image Details
-            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
+            - export IMAGE_NAME="${DOCKOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             
@@ -40,7 +40,7 @@ pipelines:
           name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux # This step doesn't need Docker, so a simple 'linux' runner is fine
+            - linux
           deployment: Production
           script:
             # 1. Read the image name from the artifact
