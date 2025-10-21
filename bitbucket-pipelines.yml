@@ -1,8 +1,14 @@
+definitions:
+  caches:
+    docker-layers: /var/lib/docker
+
 pipelines:
   branches:
     dev:
       - step:
           name: 🏗️ Build and Push Docker Image
+          caches:
+            - docker # Enables the Docker cache for this step
           services:
             - docker
           runs-on:
@@ -28,27 +34,24 @@ pipelines:
             # 4. Create the artifact for the next step
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
-            # Pass the versioned image name to the next step
             - image_name.txt
 
       - step:
           name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux
+            - linux # This step doesn't need Docker, so a simple 'linux' runner is fine
           deployment: Production
           script:
-            # 1. Read the image name from the previous step's artifact
+            # 1. Read the image name from the artifact
             - export VERSIONED_IMAGE=$(cat image_name.txt)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
 
             # 2. Update the Kubernetes Manifest
-            # Make sure yq is installed on your runner's image or install it here.
             - echo "Updating manifest with image"
             - yq e ".spec.template.spec.containers[0].image = \"${VERSIONED_IMAGE}\"" -i "${K8S_MANIFEST_PATH}"
 
             # 3. Apply the Manifest
-            # The runner uses its in-cluster service account for authentication. No SSH needed.
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
 
             # 4. Verify the Rollout
