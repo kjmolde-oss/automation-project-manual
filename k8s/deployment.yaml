@@ -16,4 +16,4 @@ spec:
       - name: automation-project-container
         image: devopskarl/automation-project:latest
         ports:
-        - containerPort: 80
+        - containerPort: 3000
