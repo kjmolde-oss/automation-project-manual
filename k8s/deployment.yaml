@@ -7,15 +7,15 @@ spec:
   replicas: 3
   selector:
     matchLabels:
-      app: automation-pods
+      app: my-app # This must match the Service's selector
   template:
     metadata:
       labels:
-        app: automation-pods
+        app: my-app # This must match this selector
     spec:
       containers:
-      - name: automation-container
-        image: devopskarl/automation-project:latest
+      - name: my-app-container
+        image: your/docker-image:tag
 
 ---
 # ----------------- Service -----------------
@@ -26,7 +26,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    app: automation-pods
+    app: my-app # Finds pods with this label
   ports:
   - port: 80
     targetPort: 80
