@@ -8,7 +8,7 @@ pipelines:
       - step:
           name: 🏗️ Build and Push Docker Image
           caches:
-            - docker-layers # <-- This now matches the definition
+            - docker-layers
           services:
             - docker
           runs-on:
@@ -16,7 +16,7 @@ pipelines:
             - linux
           script:
             # 1. Set Image Details
-            - export IMAGE_NAME="${DOCKOCKERHUB_USERNAME}/automation-project"
+            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project" # <-- Typo fixed here
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             
