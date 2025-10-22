@@ -9,14 +9,12 @@ pipelines:
           name: 🏗️ Build and Push Docker Image
           caches:
             - docker-layers
-          services:
-            - docker
           runs-on:
             - self.hosted
-            - linux
+            - linux.shell
           script:
             # 1. Set Image Details
-            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project" # <-- Typo fixed here
+            - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
             
@@ -40,7 +38,7 @@ pipelines:
           name: 🚀 Deploy to Kubernetes
           runs-on:
             - self.hosted
-            - linux
+            - linux.shell
           deployment: Production
           script:
             # 1. Read the image name from the artifact
