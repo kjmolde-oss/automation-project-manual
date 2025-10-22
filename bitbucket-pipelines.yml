@@ -13,23 +13,28 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # 1. Set Image Details
+            # --- Ensure Docker is available ---
+            - echo "🔍 Checking Docker availability..."
+            - unset DOCKER_HOST || true
+            - docker info || (echo "❌ Docker daemon not reachable. Ensure /var/run/docker.sock is mounted to the runner." && exit 1)
+
+            # --- 1. Set Image Details ---
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
-            
-            # 2. Login to Docker Hub
+
+            # --- 2. Login to Docker Hub ---
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            
-            # 3. Build, Tag, and Push
-            - echo "Building and pushing ${VERSIONED_IMAGE}..."
+
+            # --- 3. Build, Tag, and Push ---
+            - echo "🚀 Building and pushing ${VERSIONED_IMAGE}..."
             - docker build -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
             - echo "✅ Image pushed successfully!"
-            
-            # 4. Create the artifact for the next step
+
+            # --- 4. Create the artifact for the next step ---
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
             - image_name.txt
@@ -41,17 +46,17 @@ pipelines:
             - linux.shell
           deployment: Production
           script:
-            # 1. Read the image name from the artifact
+            # --- 1. Read the image name from the artifact ---
             - export VERSIONED_IMAGE=$(cat image_name.txt)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
 
-            # 2. Update the Kubernetes Manifest
-            - echo "Updating manifest with image"
+            # --- 2. Update the Kubernetes Manifest ---
+            - echo "📦 Updating Kubernetes manifest with ${VERSIONED_IMAGE}"
             - yq e ".spec.template.spec.containers[0].image = \"${VERSIONED_IMAGE}\"" -i "${K8S_MANIFEST_PATH}"
 
-            # 3. Apply the Manifest
+            # --- 3. Apply the Manifest ---
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
 
-            # 4. Verify the Rollout
+            # --- 4. Verify the Rollout ---
             - kubectl rollout status deployment/automation-project-deployment
             - echo "✅ Deployment successful!"
