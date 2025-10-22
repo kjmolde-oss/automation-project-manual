@@ -1,12 +1,9 @@
-# ----------------- Deployment -----------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: automation-project-deployment
 spec:
   replicas: 3
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app: automation-project
@@ -20,10 +17,8 @@ spec:
         image: devopskarl/automation-project:latest
         ports:
         - containerPort: 80
-
 ---
-# ----------------- Service -----------------
-apiVersion: v1
+apiVersion: v2
 kind: Service
 metadata:
   name: automation-project-service
