@@ -11,7 +11,7 @@ spec:
   template:
     metadata:
       labels:
-        app: my-app # Must match this selector
+        app: automation-pods
     spec:
       containers:
       - name: automation-container
