@@ -3,10 +3,11 @@ kind: Service
 metadata:
   name: automation-project-service
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector:
     app: automation-project
   ports:
-  - port: 80
-    targetPort: 3000
-    nodePort: 30080
+    - name: http
+      port: 80           # Service port (inside the cluster)
+      targetPort: 3000   # Pod’s container port
+      nodePort: 30080    # Exposed port on each node for HAProxy
