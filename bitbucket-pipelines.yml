@@ -50,6 +50,7 @@ pipelines:
             - export VERSIONED_IMAGE=$(cat image_name.txt)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - export K8Ss_MANIFEST_PATH="k8s/service.yaml"
+            - export K8Sss_MANIFEST_PATH="k8s/ipaddresspool.yaml"
 
             # --- 2. Update the Kubernetes Manifest ---
             - echo "📦 Updating Kubernetes manifest with ${VERSIONED_IMAGE}"
@@ -58,6 +59,7 @@ pipelines:
             # --- 3. Apply the Manifest ---
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
             - kubectl apply -f "${K8Ss_MANIFEST_PATH}"
+            - kubectl apply -f "${K8Sss_MANIFEST_PATH}"
 
             # --- 4. Verify the Rollout ---
             - kubectl rollout status deployment/automation-project-deployment
