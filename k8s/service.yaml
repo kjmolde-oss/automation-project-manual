@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: automation-project-service
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: automation-project
   ports:
