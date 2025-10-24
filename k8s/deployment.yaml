@@ -18,3 +18,10 @@ spec:
         ports:
         - containerPort: 3000
         imagePullPolicy: Always
+        resources:
+          limits:
+            # Maximum memory container can use before being killed (OOMKilled)
+            memory: "256Mi" 
+          requests:
+            # Minimum memory guaranteed to the container (used for scheduling)
+            memory: "128Mi"
