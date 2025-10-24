@@ -21,7 +21,7 @@ spec:
         resources:
           limits:
             # Maximum memory container can use before being killed (OOMKilled)
-            memory: "256Mi" 
+            memory: "512Mi" 
           requests:
             # Minimum memory guaranteed to the container (used for scheduling)
             memory: "128Mi"
