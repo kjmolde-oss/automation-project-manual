@@ -17,3 +17,4 @@ spec:
         image: devopskarl/automation-project:latest
         ports:
         - containerPort: 3000
+        imagePullPolicy: Always
