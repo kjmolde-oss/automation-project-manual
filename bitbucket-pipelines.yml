@@ -1,14 +1,8 @@
-definitions:
-  caches:
-    docker-layers: /var/lib/docker
-
 pipelines:
   branches:
     dev:
       - step:
           name: 🏗️ Build and Push Docker Image
-          caches:
-            - docker-layers
           runs-on:
             - self.hosted
             - linux.shell
@@ -36,6 +30,8 @@ pipelines:
 
             # --- 4. Create the artifact for the next step ---
             - echo "${VERSIONED_IMAGE}" > image_name.txt
+
+          # Only store the needed artifact
           artifacts:
             - image_name.txt
 
@@ -49,7 +45,7 @@ pipelines:
             # --- 1. Read the image name from the artifact ---
             - export VERSIONED_IMAGE=$(cat image_name.txt)
             - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
-            - export K8Ss_MANIFEST_PATH="k8s/service.yaml"           
+            - export K8S_SERVICE_PATH="k8s/service.yaml"
 
             # --- 2. Update the Kubernetes Manifest ---
             - echo "📦 Updating Kubernetes manifest with ${VERSIONED_IMAGE}"
@@ -57,8 +53,9 @@ pipelines:
 
             # --- 3. Apply the Manifest ---
             - kubectl apply -f "${K8S_MANIFEST_PATH}"
-            - kubectl apply -f "${K8Ss_MANIFEST_PATH}"
+            - kubectl apply -f "${K8S_SERVICE_PATH}"
 
             # --- 4. Verify the Rollout ---
             - kubectl rollout status deployment/automation-project-deployment
             - echo "✅ Deployment successful!"
+
