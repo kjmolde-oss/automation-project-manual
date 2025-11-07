@@ -12,6 +12,15 @@ spec:
       labels:
         app: automation-project
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
       containers:
       - name: automation-project-container
         image: devopskarl/automation-project:latest
@@ -20,9 +29,8 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: "100m"     # Request 0.1 of a CPU
-            memory: "128Mi"   # Request 128MB of RAM
-            # ---
+            cpu: "100m"
+            memory: "128Mi"
           limits:
-            cpu: "500m"     # Limit to 0.5 of a CPU
-            memory: "512Mi"   # Limit to 512MB of RAM
+            cpu: "500m"
+            memory: "512Mi"
