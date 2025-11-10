@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: automation-project-green
+  name: automation-project-deployment
 spec:
   replicas: 4
   selector:
@@ -13,6 +13,25 @@ spec:
         app: automation-project
         version: green
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
       containers:
       - name: automation-project-container
-        image: devopskarl/automation-project:prod-0.1.236
+        image: devopskarl/automation-project:latest
+        ports:
+        - containerPort: 3000
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
