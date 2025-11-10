@@ -31,7 +31,7 @@ pipelines:
             - image_name.txt
 
       - step:
-          name: 2. ⚠️ Check for DB Migrations (Manual)
+          name: 2. ⚠️ Check for DB Migrations
           trigger: manual
           runs-on:
             - self.hosted
