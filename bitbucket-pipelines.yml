@@ -10,31 +10,55 @@ pipelines:
             # --- Set the correct Docker host ---
             - export DOCKER_HOST_PATH="unix:///var/run/docker.sock"
             - docker -H $DOCKER_HOST_PATH info || (echo "❌ Docker daemon not reachable." && exit 1)
+            
+            # --- 1. Set Image Details ---
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
+
+            # --- 2. Login to Docker Hub ---
             - echo "$DOCKERHUB_PASSWORD" | docker -H $DOCKER_HOST_PATH login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+            # --- 3. Build, Tag, and Push ---
+            - echo "🚀 Building and pushing ${VERSIONED_IMAGE}..."
             - docker -H $DOCKER_HOST_PATH build -t "${IMAGE_NAME}:latest" .
             - docker -H $DOCKER_HOST_PATH tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - docker -H $DOCKER_HOST_PATH push "${IMAGE_NAME}:latest"
             - docker -H $DOCKER_HOST_PATH push "${VERSIONED_IMAGE}"
+            - echo "✅ Image pushed successfully!"
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
             - image_name.txt
 
       - step:
-          name: 2. 🚀 Deploy to Idle Environment (Green)
+          name: 2. ⚠️ Check for DB Migrations (Manual)
+          trigger: manual
           runs-on:
             - self.hosted
             - linux.shell
           script:
-            # --- 1. Define all our files ---
+            - echo "------------------------------------------------------"
+            - echo "This deploy is for version"
+            - echo "Did you run any backward-compatible database migrations?"
+            - echo "If this change requires a DB migration, run it now."
+            - echo "Press 'Run' to confirm you have checked."
+            - echo "------------------------------------------------------"
+          artifacts:
+            - image_name.txt # Pass artifact along
+
+      - step:
+          name: 3. 🚀 Deploy to Idle Environment
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            # --- 1. Define files and get new image name ---
             - export K8S_SERVICE_PATH="k8s/service.yaml"
             - export DEPLOY_BLUE_PATH="k8s/deployment-blue.yaml"
             - export DEPLOY_GREEN_PATH="k8s/deployment-green.yaml"
             - export NEW_IMAGE=$(cat image_name.txt)
-
-            # --- 2. Find which version is LIVE (blue) and which is IDLE (green) ---
+            
+            # --- 2. Find which version is LIVE and which is IDLE ---
             - export LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
             - if [ "$LIVE_VERSION_LABEL" == "blue" ]; then
             -   export TARGET_VERSION_LABEL="green"
@@ -45,12 +69,12 @@ pipelines:
             - fi
             - echo "🎯 Deploying new image to idle environment"
 
-            # --- 3. Clean and update the IDLE deployment ---
+            # --- 3. Clean (fix BOM error) and update the IDLE deployment ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${TARGET_DEPLOYMENT_PATH}"
             - yq e ".spec.template.spec.containers[0].image = \"${NEW_IMAGE}\"" -i "${TARGET_DEPLOYMENT_PATH}"
             - kubectl apply -f "${TARGET_DEPLOYMENT_PATH}"
 
-            # --- 4. Wait for the IDLE deployment ---
+            # --- 4. Wait for the IDLE deployment to be ready ---
             - kubectl rollout status deployment/automation-project-${TARGET_VERSION_LABEL}
             - echo "✅ ${TARGET_VERSION_LABEL} deployment is ready for testing."
             - echo "${TARGET_VERSION_LABEL}" > new_live_version.txt
@@ -58,39 +82,36 @@ pipelines:
             - new_live_version.txt
 
       - step:
-          name: 3. 🧪 Run Automated Tests
+          name: 4. 🧪 Run Automated Smoke Tests
           runs-on:
             - self.hosted
             - linux.shell
           script:
             # --- 1. Get the idle version we need to test ---
             - export TARGET_VERSION_LABEL=$(cat new_live_version.txt)
-            - echo "🧪 Running automated tests on idle version"
-
-            # --- 2. Define the internal test service ---
             - export INTERNAL_SERVICE_YAML="k8s/service-${TARGET_VERSION_LABEL}-internal.yaml"
             
-            # --- 3. Set the correct URL for localhost based on version ---
-            #    (This is the corrected logic)
+            # --- 2. Set the correct test URL ---
             - if [ "$TARGET_VERSION_LABEL" == "blue" ]; then
             -   export TEST_URL="http://localhost:30100"
             - else
             -   export TEST_URL="http://localhost:30101"
             - fi
 
-            # --- 4. Apply the internal service (so it's created) ---
+            # --- 3. Apply the internal test service ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${INTERNAL_SERVICE_YAML}"
             - kubectl apply -f "${INTERNAL_SERVICE_YAML}"
             - echo "Waiting for NodePort service to be ready..."
-            - sleep 5 # Give the service endpoint a few seconds
+            - sleep 5
 
-            # --- 5. Run the test! ---
-            - echo "Testing service at ${TEST_URL}"
-            - curl --fail --connect-timeout 10 "${TEST_URL}"
+            # --- 4. Run the advanced smoke test script ---
+            - bash k8s/smoke-test.sh "${TEST_URL}"
             - echo "✅ Automated smoke test passed!"
+          artifacts:
+            - new_live_version.txt # Pass along artifact
 
       - step:
-          name: 4. 🔄 Promote to Live (Manual Click)
+          name: 5. 🔄 Promote to Live (Manual Click)
           trigger: manual
           runs-on:
             - self.hosted
@@ -101,16 +122,19 @@ pipelines:
             - export HPA_PATH="k8s/hpa.yaml"
             - export NEW_LIVE_VERSION=$(cat new_live_version.txt)
             - export NEW_LIVE_DEPLOYMENT="automation-project-${NEW_LIVE_VERSION}"
-            - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
 
-            # --- 2. Clean and "switch" the Service ---
+            # --- 2. "Flip the switch" for the Service ---
+            - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
             - sed -i '1s/^\xEF\xBB\xBF//' "${K8S_SERVICE_PATH}"
             - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
             - kubectl apply -f "${K8S_SERVICE_PATH}"
-            
-            # --- 3. Clean and "switch" the HPA ---
+
+            # --- 3. "Flip the switch" for the HPA ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${HPA_PATH}"
             - yq e ".spec.scaleTargetRef.name = \"${NEW_LIVE_DEPLOYMENT}\"" -i "${HPA_PATH}"
             - kubectl apply -f "${HPA_PATH}"
             
-            - echo "✅ Cut-over complete! ${NEW_LIVE_VERSION} is now live."
+            # --- 4. Add grace period for connection draining ---
+            - echo "✅ Cut-over complete! Waiting 30s for old connections to drain..."
+            - sleep 30
+            - echo "✅ Promotion to ${NEW_LIVE_VERSION} is fully complete."
