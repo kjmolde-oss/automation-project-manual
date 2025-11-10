@@ -38,7 +38,7 @@ pipelines:
             - linux.shell
           script:
             - echo "------------------------------------------------------"
-            - echo "This deploy is for version"
+            - echo "This deploy is for version latest"
             - echo "Did you run any backward-compatible database migrations?"
             - echo "If this change requires a DB migration, run it now."
             - echo "Press 'Run' to confirm you have checked."
@@ -104,10 +104,8 @@ pipelines:
             - echo "Waiting for NodePort service to be ready..."
             - sleep 5
 
-            # --- 4. THIS IS THE FIX ---
-            #    Ensure the test script is executable
+            # --- 4. Ensure the test script is executable ---
             - chmod +x k8s/smoke-test.sh
-            # --- END OF FIX ---
 
             # --- 5. Run the advanced smoke test script ---
             - bash k8s/smoke-test.sh "${TEST_URL}"
@@ -143,3 +141,37 @@ pipelines:
             - echo "✅ Cut-over complete! Waiting 30s for old connections to drain..."
             - sleep 30
             - echo "✅ Promotion to ${NEW_LIVE_VERSION} is fully complete."
+
+  custom: # <-- This is your new automated rollback pipeline
+    rollback-to-idle:
+      - step:
+          name: 🔄 Automated Rollback
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            - export K8S_SERVICE_PATH="k8s/service.yaml"
+            - export HPA_PATH="k8s/hpa.yaml"
+            
+            # --- 1. Find what is LIVE and what is IDLE ---
+            - export LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
+            - if [ "$LIVE_VERSION_LABEL" == "blue" ]; then
+            -   export ROLLBACK_VERSION_LABEL="green"
+            - else
+            -   export ROLLBACK_VERSION_LABEL="blue"
+            - fi
+            - export ROLLBACK_DEPLOYMENT="automation-project-${ROLLBACK_VERSION_LABEL}"
+
+            - echo "🔥 EMERGENCY ROLLBACK"
+
+            # --- 2. "Flip the switch" for the Service ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${K8S_SERVICE_PATH}"
+            - yq e ".spec.selector.version = \"${ROLLBACK_VERSION_LABEL}\"" -i "${K8S_SERVICE_PATH}"
+            - kubectl apply -f "${K8S_SERVICE_PATH}"
+
+            # --- 3. "Flip the switch" for the HPA ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${HPA_PATH}"
+            - yq e ".spec.scaleTargetRef.name = \"${ROLLBACK_DEPLOYMENT}\"" -i "${HPA_PATH}"
+            - kubectl apply -f "${HPA_PATH}"
+
+            - echo "✅ Rollback to ${ROLLBACK_VERSION_LABEL} complete."
