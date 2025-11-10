@@ -9,31 +9,18 @@ pipelines:
           script:
             # --- Set the correct Docker host ---
             - export DOCKER_HOST_PATH="unix:///var/run/docker.sock"
-
-            # --- Ensure Docker is available ---
-            - echo "🔍 Checking Docker availability..."
             - docker -H $DOCKER_HOST_PATH info || (echo "❌ Docker daemon not reachable." && exit 1)
-
-            # --- 1. Set Image Details ---
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
-
-            # --- 2. Login to Docker Hub ---
             - echo "$DOCKERHUB_PASSWORD" | docker -H $DOCKER_HOST_PATH login -u "$DOCKERHUB_USERNAME" --password-stdin
-
-            # --- 3. Build, Tag, and Push ---
-            - echo "🚀 Building and pushing ${VERSIONED_IMAGE}..."
             - docker -H $DOCKER_HOST_PATH build -t "${IMAGE_NAME}:latest" .
             - docker -H $DOCKER_HOST_PATH tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - docker -H $DOCKER_HOST_PATH push "${IMAGE_NAME}:latest"
             - docker -H $DOCKER_HOST_PATH push "${VERSIONED_IMAGE}"
-            - echo "✅ Image pushed successfully!"
-
-            # --- 4. Create the artifact for the next step ---
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
-            - image_name.txt # Pass the image name to the next step
+            - image_name.txt
 
       - step:
           name: 2. 🚀 Deploy to Idle Environment (Green)
@@ -48,9 +35,7 @@ pipelines:
             - export NEW_IMAGE=$(cat image_name.txt)
 
             # --- 2. Find which version is LIVE (blue) and which is IDLE (green) ---
-            - echo "🔍 Checking live service selector..."
             - export LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
-            
             - if [ "$LIVE_VERSION_LABEL" == "blue" ]; then
             -   export TARGET_VERSION_LABEL="green"
             -   export TARGET_DEPLOYMENT_PATH="$DEPLOY_GREEN_PATH"
@@ -58,40 +43,67 @@ pipelines:
             -   export TARGET_VERSION_LABEL="blue"
             -   export TARGET_DEPLOYMENT_PATH="$DEPLOY_BLUE_PATH"
             - fi
-
-            - echo "✅ Live version"
             - echo "🎯 Deploying new image to idle environment"
 
-            # --- 3. Update and deploy the IDLE deployment ---
-            - echo "Updating ${TARGET_DEPLOYMENT_PATH} with image ${NEW_IMAGE}"
+            # --- 3. Clean and update the IDLE deployment ---
+            # --- BAG-O NGA FIX ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${TARGET_DEPLOYMENT_PATH}"
+            # --- END SA FIX ---
             - yq e ".spec.template.spec.containers[0].image = \"${NEW_IMAGE}\"" -i "${TARGET_DEPLOYMENT_PATH}"
             - kubectl apply -f "${TARGET_DEPLOYMENT_PATH}"
 
-            # --- 4. Wait for the IDLE deployment to be ready for testing ---
+            # --- 4. Wait for the IDLE deployment ---
             - kubectl rollout status deployment/automation-project-${TARGET_VERSION_LABEL}
-            - echo "✅ ${TARGET_VERSION_LABEL} deployment is updated and ready for testing."
-            - echo "Traffic is STILL on ${LIVE_VERSION_LABEL}."
-
-            # --- 5. Save the new version name for the manual promotion step ---
+            - echo "✅ ${TARGET_VERSION_LABEL} deployment is ready for testing."
             - echo "${TARGET_VERSION_LABEL}" > new_live_version.txt
           artifacts:
-            - new_live_version.txt # Pass the new "live" version name
+            - new_live_version.txt
 
       - step:
-          name: 3. 🔄 Promote to Live (Cut-over Traffic)
-          trigger: manual  # This waits for your manual click to "Run"
+          name: 3. 🧪 Run Automated Tests
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            # (Same as before, runs automated tests...)
+            - export TARGET_VERSION_LABEL=$(cat new_live_version.txt)
+            - export INTERNAL_SERVICE_YAML="k8s/service-${TARGET_VERSION_LABEL}-internal.yaml"
+            - export INTERNAL_SERVICE_NAME="automation-project-${TARGET_VERSION_LABEL}-internal"
+            - export INTERNAL_SERVICE_URL="http://${INTERNAL_SERVICE_NAME}.default.svc.cluster.local"
+            # --- BAG-O NGA FIX ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${INTERNAL_SERVICE_YAML}"
+            # --- END SA FIX ---
+            - kubectl apply -f "${INTERNAL_SERVICE_YAML}"
+            - sleep 5
+            - curl --fail --connect-timeout 10 "${INTERNAL_SERVICE_URL}"
+            - echo "✅ Automated smoke test passed!"
+
+      - step:
+          name: 4. 🔄 Promote to Live (Manual Click)
+          trigger: manual
           runs-on:
             - self.hosted
             - linux.shell
           script:
             # --- 1. Get the version we want to promote ---
             - export K8S_SERVICE_PATH="k8s/service.yaml"
+            - export HPA_PATH="k8s/hpa.yaml"
             - export NEW_LIVE_VERSION=$(cat new_live_version.txt)
-
+            - export NEW_LIVE_DEPLOYMENT="automation-project-${NEW_LIVE_VERSION}"
             - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
 
-            # --- 2. This is the "switch" ---
+            # --- 2. Clean and "switch" the Service ---
+            # --- BAG-O NGA FIX ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${K8S_SERVICE_PATH}"
+            # --- END SA FIX ---
             - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
             - kubectl apply -f "${K8S_SERVICE_PATH}"
+            
+            # --- 3. Clean and "switch" the HPA ---
+            # --- BAG-O NGA FIX ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${HPA_PATH}"
+            # --- END SA FIX ---
+            - yq e ".spec.scaleTargetRef.name = \"${NEW_LIVE_DEPLOYMENT}\"" -i "${HPA_PATH}"
+            - kubectl apply -f "${HPA_PATH}"
             
             - echo "✅ Cut-over complete! ${NEW_LIVE_VERSION} is now live."
