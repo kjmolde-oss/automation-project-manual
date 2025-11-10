@@ -3,10 +3,11 @@ kind: Service
 metadata:
   name: automation-project-green-internal
 spec:
-  type: ClusterIP # Internal only
+  type: NodePort
   selector:
     app: automation-project
-    version: green # <-- ALWAYS points to green
+    version: green
   ports:
   - port: 80
     targetPort: 3000
+    nodePort: 30080
