@@ -2,62 +2,81 @@ pipelines:
   branches:
     dev:
       - step:
-          name: 🏗️ Build and Push Docker Image
+          name: 1. 🏗️ Build and Push Docker Image
           runs-on:
             - self.hosted
             - linux.shell
           script:
-            # --- Ensure Docker is available ---
-            - echo "🔍 Checking Docker availability..."
-            - unset DOCKER_HOST || true
-            - docker info || (echo "❌ Docker daemon not reachable. Ensure /var/run/docker.sock is mounted to the runner." && exit 1)
-
-            # --- 1. Set Image Details ---
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
-
-            # --- 2. Login to Docker Hub ---
             - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-
-            # --- 3. Build, Tag, and Push ---
             - echo "🚀 Building and pushing ${VERSIONED_IMAGE}..."
             - docker build -t "${IMAGE_NAME}:latest" .
             - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
             - docker push "${IMAGE_NAME}:latest"
             - docker push "${VERSIONED_IMAGE}"
             - echo "✅ Image pushed successfully!"
-
-            # --- 4. Create the artifact for the next step ---
             - echo "${VERSIONED_IMAGE}" > image_name.txt
-
-          # Only store the needed artifact
           artifacts:
             - image_name.txt
 
       - step:
-          name: 🚀 Deploy to Kubernetes
+          name: 2. 🚀 Deploy to Idle Environment (Green)
           runs-on:
             - self.hosted
             - linux.shell
-          deployment: Production
           script:
-            # --- 1. Read the image name from the artifact ---
-            - export VERSIONED_IMAGE=$(cat image_name.txt)
-            - export K8S_MANIFEST_PATH="k8s/deployment.yaml"
             - export K8S_SERVICE_PATH="k8s/service.yaml"
-            - export HPA_PATH="k8s/hpa.yaml"
+            - export DEPLOY_BLUE_PATH="k8s/deployment-blue.yaml"
+            - export DEPLOY_GREEN_PATH="k8s/deployment-green.yaml"
+            - export NEW_IMAGE=$(cat image_name.txt)
 
-            # --- 2. Update the Kubernetes Manifest ---
-            - echo "📦 Updating Kubernetes manifest with ${VERSIONED_IMAGE}"
-            - yq e ".spec.template.spec.containers[0].image = \"${VERSIONED_IMAGE}\"" -i "${K8S_MANIFEST_PATH}"
+            # --- 1. Find which version is LIVE and which is IDLE ---
+            - echo "🔍 Checking live service selector..."
+            - export LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
+            
+            - if [ "$LIVE_VERSION_LABEL" == "blue" ]; then
+            -   export TARGET_VERSION_LABEL="green"
+            -   export TARGET_DEPLOYMENT_PATH="$DEPLOY_GREEN_PATH"
+            - else
+            -   export TARGET_VERSION_LABEL="blue"
+            -   export TARGET_DEPLOYMENT_PATH="$DEPLOY_BLUE_PATH"
+            - fi
+            - echo "✅ Live version"
+            - echo "🎯 Deploying new image to idle environment"
 
-            # --- 3. Apply the Manifest ---
-            - kubectl apply -f "${K8S_MANIFEST_PATH}"
+            # --- 2. Update and deploy the IDLE deployment ---
+            - yq e ".spec.template.spec.containers[0].image = \"${NEW_IMAGE}\"" -i "${TARGET_DEPLOYMENT_PATH}"
+            - kubectl apply -f "${TARGET_DEPLOYMENT_PATH}"
+
+            # --- 3. Wait for the IDLE deployment to be ready ---
+            - kubectl rollout status deployment/automation-project-${TARGET_VERSION_LABEL}
+            - echo "✅ ${TARGET_VERSION_LABEL} deployment is updated and ready."
+            - echo "Traffic is STILL on ${LIVE_VERSION_LABEL}."
+
+            # --- 4. Save the new version name for the automatic promotion step ---
+            - echo "${TARGET_VERSION_LABEL}" > new_live_version.txt
+          artifacts:
+            - new_live_version.txt
+
+      - step:
+          # --- THIS STEP IS NO LONGER MANUAL ---
+          name: 3. 🔄 Promote to Live (Automatic Cut-over)
+          runs-on:
+            - self.hosted
+            - linux.shell
+          script:
+            - export K8S_SERVICE_PATH="k8s/service.yaml"
+            - export NEW_LIVE_VERSION=$(cat new_live_version.txt)
+
+            - echo "Waiting 15 seconds to ensure new pods are stable..."
+            - sleep 15 # A small safety buffer before the cut-over
+
+            - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
+
+            # --- 2. This is the "switch" ---
+            - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
             - kubectl apply -f "${K8S_SERVICE_PATH}"
-            - kubectl apply -f "${HPA_PATH}"
-
-            # --- 4. Verify the Rollout ---
-            - kubectl rollout status deployment/automation-project-deployment
-            - echo "✅ Deployment successful!"
-
+            
+            - echo "✅ Cut-over complete! ${NEW_LIVE_VERSION} is now live."
