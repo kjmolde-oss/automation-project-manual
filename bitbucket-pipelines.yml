@@ -7,23 +7,30 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
+            # --- Set the correct Docker host ---
+            - export DOCKER_HOST_PATH="unix:///var/run/docker.sock"
+
+            # --- Ensure Docker is available ---
+            - echo "🔍 Checking Docker availability..."
+            - docker -H $DOCKER_HOST_PATH info || (echo "❌ Docker daemon not reachable." && exit 1)
+
             # --- 1. Set Image Details ---
             - export IMAGE_NAME="${DOCKERHUB_USERNAME}/automation-project"
             - export VERSION="prod-0.1.${BITBUCKET_BUILD_NUMBER}"
             - export VERSIONED_IMAGE="${IMAGE_NAME}:${VERSION}"
 
             # --- 2. Login to Docker Hub ---
-            - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            - echo "$DOCKERHUB_PASSWORD" | docker -H $DOCKER_HOST_PATH login -u "$DOCKERHUB_USERNAME" --password-stdin
 
             # --- 3. Build, Tag, and Push ---
             - echo "🚀 Building and pushing ${VERSIONED_IMAGE}..."
-            - docker build -t "${IMAGE_NAME}:latest" .
-            - docker tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
-            - docker push "${IMAGE_NAME}:latest"
-            - docker push "${VERSIONED_IMAGE}"
+            - docker -H $DOCKER_HOST_PATH build -t "${IMAGE_NAME}:latest" .
+            - docker -H $DOCKER_HOST_PATH tag "${IMAGE_NAME}:latest" "${VERSIONED_IMAGE}"
+            - docker -H $DOCKER_HOST_PATH push "${IMAGE_NAME}:latest"
+            - docker -H $DOCKER_HOST_PATH push "${VERSIONED_IMAGE}"
             - echo "✅ Image pushed successfully!"
 
-            # --- 4. Create artifacts for the next steps ---
+            # --- 4. Create the artifact for the next step ---
             - echo "${VERSIONED_IMAGE}" > image_name.txt
           artifacts:
             - image_name.txt # Pass the image name to the next step
@@ -42,7 +49,6 @@ pipelines:
 
             # --- 2. Find which version is LIVE (blue) and which is IDLE (green) ---
             - echo "🔍 Checking live service selector..."
-            # This command reads the 'version' label from your live service
             - export LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
             
             - if [ "$LIVE_VERSION_LABEL" == "blue" ]; then
@@ -73,7 +79,7 @@ pipelines:
 
       - step:
           name: 3. 🔄 Promote to Live (Cut-over Traffic)
-          trigger: manual  # <-- THIS IS THE KEY! It waits for you to click "Run".
+          trigger: manual  # This waits for your manual click to "Run"
           runs-on:
             - self.hosted
             - linux.shell
@@ -85,7 +91,6 @@ pipelines:
             - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
 
             # --- 2. This is the "switch" ---
-            # It edits the service selector to point to the new version
             - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
             - kubectl apply -f "${K8S_SERVICE_PATH}"
             
