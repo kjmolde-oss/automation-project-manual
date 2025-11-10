@@ -46,9 +46,7 @@ pipelines:
             - echo "🎯 Deploying new image to idle environment"
 
             # --- 3. Clean and update the IDLE deployment ---
-            # --- BAG-O NGA FIX ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${TARGET_DEPLOYMENT_PATH}"
-            # --- END SA FIX ---
             - yq e ".spec.template.spec.containers[0].image = \"${NEW_IMAGE}\"" -i "${TARGET_DEPLOYMENT_PATH}"
             - kubectl apply -f "${TARGET_DEPLOYMENT_PATH}"
 
@@ -73,13 +71,15 @@ pipelines:
             - export INTERNAL_SERVICE_YAML="k8s/service-${TARGET_VERSION_LABEL}-internal.yaml"
             
             # --- 3. Set the correct URL for localhost based on version ---
+            #    (This is the corrected logic)
             - if [ "$TARGET_VERSION_LABEL" == "blue" ]; then
-            -   export TEST_URL="http://localhost:30080"
+            -   export TEST_URL="http://localhost:30100"
             - else
-            -   export TEST_URL="http://localhost:443"
+            -   export TEST_URL="http://localhost:30101"
             - fi
 
             # --- 4. Apply the internal service (so it's created) ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${INTERNAL_SERVICE_YAML}"
             - kubectl apply -f "${INTERNAL_SERVICE_YAML}"
             - echo "Waiting for NodePort service to be ready..."
             - sleep 5 # Give the service endpoint a few seconds
@@ -87,7 +87,6 @@ pipelines:
             # --- 5. Run the test! ---
             - echo "Testing service at ${TEST_URL}"
             - curl --fail --connect-timeout 10 "${TEST_URL}"
-            
             - echo "✅ Automated smoke test passed!"
 
       - step:
@@ -105,16 +104,12 @@ pipelines:
             - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
 
             # --- 2. Clean and "switch" the Service ---
-            # --- BAG-O NGA FIX ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${K8S_SERVICE_PATH}"
-            # --- END SA FIX ---
             - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
             - kubectl apply -f "${K8S_SERVICE_PATH}"
             
             # --- 3. Clean and "switch" the HPA ---
-            # --- BAG-O NGA FIX ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${HPA_PATH}"
-            # --- END SA FIX ---
             - yq e ".spec.scaleTargetRef.name = \"${NEW_LIVE_DEPLOYMENT}\"" -i "${HPA_PATH}"
             - kubectl apply -f "${HPA_PATH}"
             
