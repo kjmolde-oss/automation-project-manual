@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-  res.send('Automation Deployment using Bitbucket + Docker Hub + Kubernetes + k3s + k3d with blue/green deployment in ubuntu server successfully');
+  res.send('Automation Deployment using Bitbucket + Docker Hub + Kubernetes + k3s + k3d + blue/green deployment in ubuntu server successfully');
 });
 
 app.listen(PORT, () => {
