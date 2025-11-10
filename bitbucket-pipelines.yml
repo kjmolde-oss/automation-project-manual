@@ -74,9 +74,9 @@ pipelines:
             
             # --- 3. Set the correct URL for localhost based on version ---
             - if [ "$TARGET_VERSION_LABEL" == "blue" ]; then
-            -   export TEST_URL="http://localhost:30100"
+            -   export TEST_URL="http://localhost:30080"
             - else
-            -   export TEST_URL="http://localhost:30101"
+            -   export TEST_URL="http://localhost:443"
             - fi
 
             # --- 4. Apply the internal service (so it's created) ---
