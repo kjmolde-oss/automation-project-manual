@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: automation-project-green
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: automation-project
+  template:
+    metadata:
+      labels:
+        app: automation-project
+        version: green
+    spec:
+      containers:
+      - name: automation-project-container
+        image: devopskarl/automation-project:prod-0.1.236
