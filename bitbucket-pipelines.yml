@@ -65,17 +65,29 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # (Same as before, runs automated tests...)
+            # --- 1. Get the idle version we need to test ---
             - export TARGET_VERSION_LABEL=$(cat new_live_version.txt)
+            - echo "🧪 Running automated tests on idle version"
+
+            # --- 2. Define the internal test service ---
             - export INTERNAL_SERVICE_YAML="k8s/service-${TARGET_VERSION_LABEL}-internal.yaml"
-            - export INTERNAL_SERVICE_NAME="automation-project-${TARGET_VERSION_LABEL}-internal"
-            - export INTERNAL_SERVICE_URL="http://${INTERNAL_SERVICE_NAME}.default.svc.cluster.local"
-            # --- BAG-O NGA FIX ---
-            - sed -i '1s/^\xEF\xBB\xBF//' "${INTERNAL_SERVICE_YAML}"
-            # --- END SA FIX ---
+            
+            # --- 3. Set the correct URL for localhost based on version ---
+            - if [ "$TARGET_VERSION_LABEL" == "blue" ]; then
+            -   export TEST_URL="http://localhost:30100"
+            - else
+            -   export TEST_URL="http://localhost:30101"
+            - fi
+
+            # --- 4. Apply the internal service (so it's created) ---
             - kubectl apply -f "${INTERNAL_SERVICE_YAML}"
-            - sleep 5
-            - curl --fail --connect-timeout 10 "${INTERNAL_SERVICE_URL}"
+            - echo "Waiting for NodePort service to be ready..."
+            - sleep 5 # Give the service endpoint a few seconds
+
+            # --- 5. Run the test! ---
+            - echo "Testing service at ${TEST_URL}"
+            - curl --fail --connect-timeout 10 "${TEST_URL}"
+            
             - echo "✅ Automated smoke test passed!"
 
       - step:
