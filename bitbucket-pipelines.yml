@@ -104,7 +104,12 @@ pipelines:
             - echo "Waiting for NodePort service to be ready..."
             - sleep 5
 
-            # --- 4. Run the advanced smoke test script ---
+            # --- 4. THIS IS THE FIX ---
+            #    Ensure the test script is executable
+            - chmod +x k8s/smoke-test.sh
+            # --- END OF FIX ---
+
+            # --- 5. Run the advanced smoke test script ---
             - bash k8s/smoke-test.sh "${TEST_URL}"
             - echo "✅ Automated smoke test passed!"
           artifacts:
