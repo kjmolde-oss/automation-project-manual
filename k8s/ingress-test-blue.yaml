@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   name: test-blue-ingress
 spec:
+  ingressClassName: apisix
   rules:
   - host: "test-blue.karl.com"
     http:
