@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: automation-project-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: automation-project
     version: blue
@@ -11,4 +11,3 @@ spec:
     - name: http
       port: 80
       targetPort: 3000
-      nodePort: 30080
