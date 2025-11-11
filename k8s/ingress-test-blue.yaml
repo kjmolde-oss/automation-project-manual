@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-blue-ingress
+spec:
+  rules:
+  - host: "test-blue.karl.com"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: automation-project-blue-internal
+            port:
+              number: 80
