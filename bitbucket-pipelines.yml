@@ -31,14 +31,14 @@ pipelines:
             - image_name.txt
 
       - step:
-          name: 2. ⚠️ Check for DB Migrations
+          name: 2. ⚠️ Check for DB Migrations (Manual)
           trigger: manual
           runs-on:
             - self.hosted
             - linux.shell
           script:
             - echo "------------------------------------------------------"
-            - echo "This deploy is for version latest"
+            - echo "This deploy is for latest version"
             - echo "Did you run any backward-compatible database migrations?"
             - echo "If this change requires a DB migration, run it now."
             - echo "Press 'Run' to confirm you have checked."
@@ -89,20 +89,21 @@ pipelines:
           script:
             # --- 1. Get the idle version we need to test ---
             - export TARGET_VERSION_LABEL=$(cat new_live_version.txt)
-            - export INTERNAL_SERVICE_YAML="k8s/service-${TARGET_VERSION_LABEL}-internal.yaml"
             
-            # --- 2. Set the correct test URL ---
+            # --- 2. Set the correct test URL and Ingress file ---
             - if [ "$TARGET_VERSION_LABEL" == "blue" ]; then
-            -   export TEST_URL="http://localhost:30100"
+            -   export TEST_URL="http://test-blue.karl.com"
+            -   export TEST_INGRESS_YAML="k8s/ingress-test-blue.yaml"
             - else
-            -   export TEST_URL="http://localhost:30101"
+            -   export TEST_URL="http://test-green.karl.com"
+            -   export TEST_INGRESS_YAML="k8s/ingress-test-green.yaml"
             - fi
 
-            # --- 3. Apply the internal test service ---
-            - sed -i '1s/^\xEF\xBB\xBF//' "${INTERNAL_SERVICE_YAML}"
-            - kubectl apply -f "${INTERNAL_SERVICE_YAML}"
-            - echo "Waiting for NodePort service to be ready..."
-            - sleep 5
+            # --- 3. Apply the internal test Ingress rule ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${TEST_INGRESS_YAML}"
+            - kubectl apply -f "${TEST_INGRESS_YAML}"
+            - echo "Waiting for Ingress rule to be ready..."
+            - sleep 10 # Ingress rules can take a few seconds
 
             # --- 4. Ensure the test script is executable ---
             - chmod +x k8s/smoke-test.sh
@@ -120,9 +121,10 @@ pipelines:
             - self.hosted
             - linux.shell
           script:
-            # --- 1. Get the version we want to promote ---
+            # --- 1. Define all live files ---
             - export K8S_SERVICE_PATH="k8s/service.yaml"
             - export HPA_PATH="k8s/hpa.yaml"
+            - export LIVE_INGRESS_PATH="k8s/ingress-live.yaml"
             - export NEW_LIVE_VERSION=$(cat new_live_version.txt)
             - export NEW_LIVE_DEPLOYMENT="automation-project-${NEW_LIVE_VERSION}"
 
@@ -137,12 +139,16 @@ pipelines:
             - yq e ".spec.scaleTargetRef.name = \"${NEW_LIVE_DEPLOYMENT}\"" -i "${HPA_PATH}"
             - kubectl apply -f "${HPA_PATH}"
             
-            # --- 4. Add grace period for connection draining ---
+            # --- 4. Apply the Live Ingress rule ---
+            - sed -i '1s/^\xEF\xBB\xBF//' "${LIVE_INGRESS_PATH}"
+            - kubectl apply -f "${LIVE_INGRESS_PATH}"
+
+            # --- 5. Add grace period for connection draining ---
             - echo "✅ Cut-over complete! Waiting 30s for old connections to drain..."
             - sleep 30
             - echo "✅ Promotion to ${NEW_LIVE_VERSION} is fully complete."
 
-  custom: # <-- This is your new automated rollback pipeline
+  custom: # --- This is your automated rollback pipeline ---
     rollback-to-idle:
       - step:
           name: 🔄 Automated Rollback
@@ -174,4 +180,4 @@ pipelines:
             - yq e ".spec.scaleTargetRef.name = \"${ROLLBACK_DEPLOYMENT}\"" -i "${HPA_PATH}"
             - kubectl apply -f "${HPA_PATH}"
 
-            - echo "✅ Rollback to ${ROLLBACK_VERSION_LABEL} complete."
+            - echo "✅ Rollback complete."
