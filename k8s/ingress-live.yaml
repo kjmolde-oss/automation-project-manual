@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   name: automation-project-ingress
 spec:
+  ingressClassName: apisix
   rules:
   - host: "app.karl.com"
     http:
