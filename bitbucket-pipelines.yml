@@ -122,28 +122,43 @@ pipelines:
             - linux.shell
           script:
             # --- 1. Define all live files ---
-            - export K8S_SERVICE_PATH="k8s/service.yaml"
             - export HPA_PATH="k8s/hpa.yaml"
-            - export LIVE_INGRESS_PATH="k8s/ingress-live.yaml"
-            - export NEW_LIVE_VERSION=$(cat new_live_version.txt)
+            - export LIVE_ROUTE_PATH="k8s/apisix-route-live.yaml" # <-- BAG-O NGA FILE
+            - export DASHBOARD_INGRESS_PATH="k8s/ingress-apisix-dashboard.yaml"
+            
+            - export NEW_LIVE_VERSION=$(cat new_live_version.txt) # e.g., "blue"
             - export NEW_LIVE_DEPLOYMENT="automation-project-${NEW_LIVE_VERSION}"
 
-            # --- 2. "Flip the switch" for the Service ---
-            - echo "🔄 Switching live traffic to ${NEW_LIVE_VERSION}..."
-            - sed -i '1s/^\xEF\xBB\xBF//' "${K8S_SERVICE_PATH}"
-            - yq e ".spec.selector.version = \"${NEW_LIVE_VERSION}\"" -i "${K8S_SERVICE_PATH}"
-            - kubectl apply -f "${K8S_SERVICE_PATH}"
+            # --- 2. Pangitaa ang "OLD" nga version (ang i-zero nato) ---
+            - if [ "$NEW_LIVE_VERSION" == "blue" ]; then
+            -   export OLD_LIVE_VERSION="green"
+            - else
+            -   export OLD_LIVE_VERSION="blue"
+            - fi
+            - echo "🔄 Promoting ${NEW_LIVE_VERSION} (100%)"
+            - echo "🔄 Demoting ${OLD_LIVE_VERSION} (0%)"
 
-            # --- 3. "Flip the switch" for the HPA ---
+            # --- 3. "Flip the switch" sa APISIX (ANG BAG-O NGA LOGIC) ---
+            - echo "Updating APISIX route weights..."
+            # I-set ang 100% sa NEW version
+            - sed -i '1s/^\xEF\xBB\xBF//' "${LIVE_ROUTE_PATH}"
+            - yq e "(.spec.http[0].backends[] | select(.serviceName == \"automation-project-${NEW_LIVE_VERSION}-internal\")).weight = 100" -i "${LIVE_ROUTE_PATH}"
+            # I-set ang 0% sa OLD version
+            - yq e "(.spec.http[0].backends[] | select(.serviceName == \"automation-project-${OLD_LIVE_VERSION}-internal\")).weight = 0" -i "${LIVE_ROUTE_PATH}"
+            # I-apply ang file
+            - kubectl apply -f "${LIVE_ROUTE_PATH}"
+
+            # --- 4. "Flip the switch" for the HPA (Parehas sa sauna) ---
             - sed -i '1s/^\xEF\xBB\xBF//' "${HPA_PATH}"
             - yq e ".spec.scaleTargetRef.name = \"${NEW_LIVE_DEPLOYMENT}\"" -i "${HPA_PATH}"
             - kubectl apply -f "${HPA_PATH}"
             
-            # --- 4. Apply the Live Ingress rule ---
-            - sed -i '1s/^\xEF\xBB\xBF//' "${LIVE_INGRESS_PATH}"
-            - kubectl apply -f "${LIVE_INGRESS_PATH}"
+            # --- 5. I-apply ang Dashboard Ingress (Parehas sa sauna) ---
+            - echo "🔄 Applying APISIX Dashboard Ingress rule..."
+            - sed -i '1s/^\xEF\xBB\xBF//' "${DASHBOARD_INGRESS_PATH}"
+            - kubectl apply -f "${DASHBOARD_INGRESS_PATH}"
 
-            # --- 5. Add grace period for connection draining ---
+            # --- 6. Add grace period (Parehas sa sauna) ---
             - echo "✅ Cut-over complete! Waiting 30s for old connections to drain..."
             - sleep 30
             - echo "✅ Promotion to ${NEW_LIVE_VERSION} is fully complete."
