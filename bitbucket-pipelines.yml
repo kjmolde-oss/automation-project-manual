@@ -67,6 +67,8 @@ pipelines:
             -   export TARGET_VERSION_LABEL="blue"
             -   export TARGET_DEPLOYMENT_PATH="$DEPLOY_BLUE_PATH"
             - fi
+            
+            # --- MAO NI ANG MGA KULANG NGA PART ---
             - echo "🎯 Deploying new image to idle environment"
 
             # --- 3. Clean (fix BOM error) and update the IDLE deployment ---
@@ -78,6 +80,7 @@ pipelines:
             - kubectl rollout status deployment/automation-project-${TARGET_VERSION_LABEL}
             - echo "✅ ${TARGET_VERSION_LABEL} deployment is ready for testing."
             - echo "${TARGET_VERSION_LABEL}" > new_live_version.txt
+            # --- END SA KULANG NGA PART ---
           artifacts:
             - new_live_version.txt
 
