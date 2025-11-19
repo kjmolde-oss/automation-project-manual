@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3000;
 
 // 1. Your Main Route
 app.get('/', (req, res) => {
-  res.send('Automation Deployment using Bitbucket + Docker Hub + Kubernetes + k3s + k3d + blue-green deployment');
+  res.send('Automation Deployment using Bitbucket + Docker Hub + Kubernetes + k3s + k3d + blue-green deployment successfully');
 });
 
 // --- 2. ADDED ROUTES FOR THE SMOKE TEST ---
