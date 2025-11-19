@@ -2,6 +2,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: test-blue-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
 spec:
   rules:
   - host: "test-blue.karl.com"
