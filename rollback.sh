@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# ==============================================
+# ======================================================
 #           Emergency Rollback Script
-# ==============================================
+# ======================================================
 
 echo "--------------------------------------------------"
 echo "              EMERGENCY ROLLBACK"
@@ -13,17 +13,17 @@ K8S_SERVICE_PATH="k8s/service.yaml"
 HPA_PATH="k8s/hpa.yaml"
 
 echo
-echo "=============================================="
+echo "=================================================="
 echo "               FIND LIVE VERSION"
-echo "=============================================="
+echo "=================================================="
 
 LIVE_VERSION_LABEL=$(kubectl get svc automation-project-service -o=jsonpath='{.spec.selector.version}')
 echo "Live version detected: $LIVE_VERSION_LABEL"
 
 echo
-echo "=============================================="
+echo "=================================================="
 echo "           DETERMINE ROLLBACK TARGET"
-echo "=============================================="
+echo "=================================================="
 
 if [ "$LIVE_VERSION_LABEL" = "blue" ]; then
     ROLLBACK_VERSION_LABEL="green"
@@ -37,9 +37,9 @@ echo "Rollback will switch traffic from: $LIVE_VERSION_LABEL"
 echo "Rollback target deployment: $ROLLBACK_VERSION_LABEL"
 
 echo
-echo "=============================================="
+echo "=================================================="
 echo "                UPDATING SERVICE"
-echo "=============================================="
+echo "=================================================="
 
 # Remove BOM if present
 sed -i '1s/^\xEF\xBB\xBF//' "$K8S_SERVICE_PATH"
@@ -48,9 +48,9 @@ yq e ".spec.selector.version = \"${ROLLBACK_VERSION_LABEL}\"" -i "$K8S_SERVICE_P
 kubectl apply -f "$K8S_SERVICE_PATH"
 
 echo
-echo "=============================================="
+echo "=================================================="
 echo "                  UPDATING HPA"
-echo "=============================================="
+echo "=================================================="
 
 sed -i '1s/^\xEF\xBB\xBF//' "$HPA_PATH"
 

@@ -22,7 +22,7 @@ spec:
                     operator: DoesNotExist
       containers:
         - name: automation-project-container
-          image: devopskarl/automation-project:manual-20251119-054057
+          image: devopskarl/automation-project:prod-1763601597
           ports:
             - containerPort: 3000
           imagePullPolicy: Always
